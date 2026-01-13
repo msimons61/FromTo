@@ -19,12 +19,14 @@ class SettingsData: ObservableObject {
     @Published var fromCurrency: String {
         didSet {
             UserDefaults.standard.set(fromCurrency, forKey: "com.fromto.settings.fromCurrency")
+            updateCurrencyRateIfNeeded()
         }
     }
 
     @Published var toCurrency: String {
         didSet {
             UserDefaults.standard.set(toCurrency, forKey: "com.fromto.settings.toCurrency")
+            updateCurrencyRateIfNeeded()
         }
     }
 
@@ -112,6 +114,13 @@ class SettingsData: ObservableObject {
             self.defaultMaximumCost = max
         } else {
             self.defaultMaximumCost = nil
+        }
+    }
+
+    // MARK: - Helper Methods
+    private func updateCurrencyRateIfNeeded() {
+        if fromCurrency == toCurrency {
+            currencyRate = 1.0
         }
     }
 }
