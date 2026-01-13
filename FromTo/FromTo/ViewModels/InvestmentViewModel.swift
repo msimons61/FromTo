@@ -35,6 +35,11 @@ class InvestmentViewModel: ObservableObject {
     @Published private(set) var numberOfStocks: Int = 0
     @Published private(set) var investedAmount: Decimal = 0
 
+    // MARK: - Computed Properties
+    var remainingAmount: Decimal {
+        return investableAmount - investedAmount
+    }
+
     private var settings: SettingsData
     private var cancellables = Set<AnyCancellable>()
     private var isInitialized = false

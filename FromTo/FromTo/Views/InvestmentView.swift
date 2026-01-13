@@ -147,6 +147,13 @@ struct InvestmentView: View {
                         Text(viewModel.investedAmount.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + settings.toCurrency)
                             .foregroundColor(.secondary)
                     }
+
+                    HStack {
+                        Text("Remaining Amount")
+                        Spacer()
+                        Text(viewModel.remainingAmount.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + settings.toCurrency)
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
             .navigationTitle("Investment")
