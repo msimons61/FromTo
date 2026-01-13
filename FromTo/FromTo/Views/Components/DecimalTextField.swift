@@ -57,7 +57,8 @@ struct DecimalTextField: View {
                         textValue = formatter.format(
                             currentValue,
                             fractionDigits: fractionDigits,
-                            includeGrouping: includeGrouping
+                            includeGrouping: includeGrouping,
+                            enforceMinimumDigits: suffix != nil
                         )
                     }
                 }
@@ -68,7 +69,8 @@ struct DecimalTextField: View {
                     textValue = formatter.format(
                         currentValue,
                         fractionDigits: fractionDigits,
-                        includeGrouping: includeGrouping
+                        includeGrouping: includeGrouping,
+                        enforceMinimumDigits: suffix != nil
                     )
                 }
             }
@@ -82,7 +84,8 @@ struct DecimalTextField: View {
                         textValue = formatter.format(
                             currentValue,
                             fractionDigits: fractionDigits,
-                            includeGrouping: includeGrouping
+                            includeGrouping: includeGrouping,
+                            enforceMinimumDigits: suffix != nil
                         )
                     }
                 }
@@ -158,7 +161,8 @@ struct DecimalTextFieldNonOptional: View {
                     textValue = formatter.format(
                         value,
                         fractionDigits: fractionDigits,
-                        includeGrouping: includeGrouping
+                        includeGrouping: includeGrouping,
+                        enforceMinimumDigits: suffix != nil
                     )
                 }
             }
@@ -167,7 +171,8 @@ struct DecimalTextFieldNonOptional: View {
                 textValue = formatter.format(
                     value,
                     fractionDigits: fractionDigits,
-                    includeGrouping: includeGrouping
+                    includeGrouping: includeGrouping,
+                    enforceMinimumDigits: suffix != nil
                 )
             }
             .onChange(of: value) { _, newValue in
@@ -179,7 +184,8 @@ struct DecimalTextFieldNonOptional: View {
                     textValue = formatter.format(
                         newValue,
                         fractionDigits: fractionDigits,
-                        includeGrouping: includeGrouping
+                        includeGrouping: includeGrouping,
+                        enforceMinimumDigits: suffix != nil
                     )
                 }
             }

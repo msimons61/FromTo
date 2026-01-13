@@ -109,7 +109,7 @@ struct InvestmentView: View {
                     HStack {
                         Text("Total Cost")
                         Spacer()
-                        Text(viewModel.totalCost.formatted(fractionDigits: 2) + " " + settings.fromCurrency)
+                        Text(viewModel.totalCost.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + settings.fromCurrency)
                             .foregroundColor(.secondary)
                     }
                 } header: {
@@ -119,10 +119,9 @@ struct InvestmentView: View {
                         Button(action: {
                             viewModel.reloadCostsFromSettings()
                         }) {
-                            Image(systemName: "arrow.trianglehead.2.counterclockwise.rotate.90")
-                                .font(.caption)
+                            Image(systemName: "arrow.counterclockwise")
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.borderedProminent)
                     }
                 }
                 
@@ -131,7 +130,7 @@ struct InvestmentView: View {
                     HStack {
                         Text("Investable Amount")
                         Spacer()
-                        Text(viewModel.investableAmount.formatted(fractionDigits: 2) + " " + settings.toCurrency)
+                        Text(viewModel.investableAmount.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + settings.toCurrency)
                             .foregroundColor(.secondary)
                     }
                     
@@ -145,7 +144,7 @@ struct InvestmentView: View {
                     HStack {
                         Text("Invested Amount")
                         Spacer()
-                        Text(viewModel.investedAmount.formatted(fractionDigits: 2) + " " + settings.toCurrency)
+                        Text(viewModel.investedAmount.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + settings.toCurrency)
                             .foregroundColor(.secondary)
                     }
                 }

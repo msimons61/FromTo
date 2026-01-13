@@ -31,7 +31,7 @@ struct SettingsView: View {
                 }
                 
                 // MARK: - Currency Section
-                Section("Currency") {
+                Section {
                     NavigationLink(destination: CurrencySelectionView(
                         selectedCurrency: $settings.fromCurrency,
                         availableCurrencies: settings.availableCurrencies,
@@ -44,7 +44,7 @@ struct SettingsView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                    
+
                     NavigationLink(destination: CurrencySelectionView(
                         selectedCurrency: $settings.toCurrency,
                         availableCurrencies: settings.availableCurrencies,
@@ -57,7 +57,7 @@ struct SettingsView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                    
+
                     HStack {
                         Text("Currency Rate")
                         Spacer()
@@ -72,6 +72,17 @@ struct SettingsView: View {
                         )
                         .multilineTextAlignment(.trailing)
                         .focused($focusedField, equals: .currencyRate)
+                    }
+                } header: {
+                    HStack {
+                        Text("Currency")
+                        Spacer()
+                        Button(action: {
+                            swapCurrencies()
+                        }) {
+                            Image(systemName: "arrow.trianglehead.2.counterclockwise.rotate.90")
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
                 }
                 
@@ -178,6 +189,12 @@ struct SettingsView: View {
     }
     
     // MARK: - Helper Methods
+    private func swapCurrencies() {
+        let temp = settings.fromCurrency
+        settings.fromCurrency = settings.toCurrency
+        settings.toCurrency = temp
+    }
+
     private func clearCurrentField() {
         guard let field = focusedField else { return }
 

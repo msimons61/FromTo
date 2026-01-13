@@ -49,14 +49,14 @@ struct PercentageTextField: View {
                     // Format the value when focus is lost
                     // Convert decimal to percentage for display (multiply by 100)
                     let percentageValue = value * 100
-                    textValue = formatter.format(percentageValue, fractionDigits: 6, includeGrouping: false)
+                    textValue = formatter.format(percentageValue, fractionDigits: 6, includeGrouping: false, enforceMinimumDigits: false)
                 }
             }
             .onAppear {
                 // Initialize text value from bound value
                 // Convert decimal to percentage for display (multiply by 100)
                 let percentageValue = value * 100
-                textValue = formatter.format(percentageValue, fractionDigits: 6, includeGrouping: false)
+                textValue = formatter.format(percentageValue, fractionDigits: 6, includeGrouping: false, enforceMinimumDigits: false)
             }
             .onChange(of: value) { _, newValue in
                 // Update text value when bound value changes externally
@@ -65,7 +65,7 @@ struct PercentageTextField: View {
                     textValue = ""
                 } else if !isFocused {
                     let percentageValue = newValue * 100
-                    textValue = formatter.format(percentageValue, fractionDigits: 6, includeGrouping: false)
+                    textValue = formatter.format(percentageValue, fractionDigits: 6, includeGrouping: false, enforceMinimumDigits: false)
                 }
             }
 
@@ -134,7 +134,7 @@ struct PercentageTextFieldOptional: View {
                     // Format the value when focus is lost
                     if let currentValue = value {
                         let percentageValue = currentValue * 100
-                        textValue = formatter.format(percentageValue, fractionDigits: 6, includeGrouping: false)
+                        textValue = formatter.format(percentageValue, fractionDigits: 6, includeGrouping: false, enforceMinimumDigits: false)
                     }
                 }
             }
@@ -142,7 +142,7 @@ struct PercentageTextFieldOptional: View {
                 // Initialize text value from bound value
                 if let currentValue = value {
                     let percentageValue = currentValue * 100
-                    textValue = formatter.format(percentageValue, fractionDigits: 6, includeGrouping: false)
+                    textValue = formatter.format(percentageValue, fractionDigits: 6, includeGrouping: false, enforceMinimumDigits: false)
                 }
             }
             .onChange(of: value) { _, newValue in
@@ -153,7 +153,7 @@ struct PercentageTextFieldOptional: View {
                 } else if !isFocused {
                     if let currentValue = newValue {
                         let percentageValue = currentValue * 100
-                        textValue = formatter.format(percentageValue, fractionDigits: 6, includeGrouping: false)
+                        textValue = formatter.format(percentageValue, fractionDigits: 6, includeGrouping: false, enforceMinimumDigits: false)
                     }
                 }
             }

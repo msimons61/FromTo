@@ -25,7 +25,7 @@ struct DifferenceView: View {
         NavigationStack {
             Form {
                 // MARK: - Values Section
-                Section("Values") {
+                Section {
                     HStack {
                         Text("From")
                         Spacer()
@@ -37,7 +37,7 @@ struct DifferenceView: View {
                         .multilineTextAlignment(.trailing)
                         .focused($focusedField, equals: .fromValue)
                     }
-                    
+
                     HStack {
                         Text("To")
                         Spacer()
@@ -48,6 +48,17 @@ struct DifferenceView: View {
                         )
                         .multilineTextAlignment(.trailing)
                         .focused($focusedField, equals: .toValue)
+                    }
+                } header: {
+                    HStack {
+                        Text("Values")
+                        Spacer()
+                        Button(action: {
+                            swapValues()
+                        }) {
+                            Image(systemName: "arrow.trianglehead.2.counterclockwise.rotate.90")
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
                 }
                 
@@ -117,6 +128,12 @@ struct DifferenceView: View {
         }
     }
     // MARK: - Helper Methods
+    private func swapValues() {
+        let temp = viewModel.fromValue
+        viewModel.fromValue = viewModel.toValue
+        viewModel.toValue = temp
+    }
+
     private func clearCurrentField() {
         guard let field = focusedField else { return }
 

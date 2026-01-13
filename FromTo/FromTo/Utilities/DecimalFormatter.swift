@@ -11,13 +11,13 @@ struct DecimalFormatterUtility {
     static let shared = DecimalFormatterUtility()
 
     // Format decimal for display with locale-specific separators
-    func format(_ decimal: Decimal, fractionDigits: Int = 2, includeGrouping: Bool = true) -> String {
+    func format(_ decimal: Decimal, fractionDigits: Int = 2, includeGrouping: Bool = true, enforceMinimumDigits: Bool = true) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.locale = Locale.current
         formatter.usesGroupingSeparator = includeGrouping
         formatter.maximumFractionDigits = fractionDigits
-        formatter.minimumFractionDigits = 0
+        formatter.minimumFractionDigits = enforceMinimumDigits ? fractionDigits : 0
 
         return formatter.string(from: decimal as NSNumber) ?? "\(decimal)"
     }
@@ -86,8 +86,8 @@ struct DecimalFormatterUtility {
 
 // Extension for convenience
 extension Decimal {
-    func formatted(fractionDigits: Int = 2, includeGrouping: Bool = true) -> String {
-        return DecimalFormatterUtility.shared.format(self, fractionDigits: fractionDigits, includeGrouping: includeGrouping)
+    func formatted(fractionDigits: Int = 2, includeGrouping: Bool = true, enforceMinimumDigits: Bool = false) -> String {
+        return DecimalFormatterUtility.shared.format(self, fractionDigits: fractionDigits, includeGrouping: includeGrouping, enforceMinimumDigits: enforceMinimumDigits)
     }
 }
 
