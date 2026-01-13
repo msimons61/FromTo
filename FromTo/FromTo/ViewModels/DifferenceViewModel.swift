@@ -12,26 +12,36 @@ class DifferenceViewModel: ObservableObject {
     // MARK: - Published Properties
     @Published var fromValue: Decimal = 0
     @Published var toValue: Decimal = 0
+    @Published var isRelativeMode: Bool = false
 
     private var cancellables = Set<AnyCancellable>()
 
-    // MARK: - Computed Properties
-    var absoluteDifference: Decimal {
+    // MARK: - Computed Properties for Absolute Mode
+    var absoluteDifferenceAbsolute: Decimal {
         return toValue - fromValue
     }
 
-    var relativeDifference: Decimal? {
+    var relativeDifferenceAbsolute: Decimal? {
         guard fromValue != 0 else { return nil }
         return (toValue - fromValue) / fromValue
     }
 
-    var relativeDifferenceFormatted: String {
-        guard let relDiff = relativeDifference else {
+    var relativeDifferenceAbsoluteFormatted: String {
+        guard let relDiff = relativeDifferenceAbsolute else {
             return "N/A (division by zero)"
         }
         // Convert to percentage (multiply by 100) and format
         let percentage = relDiff * 100
-        return percentage.formatted(fractionDigits: 2) + "%"
+        return percentage.formatted() + " %"
+    }
+
+    // MARK: - Computed Properties for Relative Mode
+    var absoluteDifferenceRelative: Decimal {
+        return fromValue * toValue
+    }
+
+    var cumulativeDifference: Decimal {
+        return fromValue * (1 + toValue)
     }
 
     // MARK: - Initialization
@@ -43,12 +53,13 @@ class DifferenceViewModel: ObservableObject {
     // MARK: - Persistence
     private func setupPersistence() {
         // Save to UserDefaults whenever any property changes
-        Publishers.CombineLatest(
+        Publishers.CombineLatest3(
             $fromValue,
-            $toValue
+            $toValue,
+            $isRelativeMode
         )
         .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
-        .sink { [weak self] _, _ in
+        .sink { [weak self] _, _, _ in
             self?.saveToDefaults()
         }
         .store(in: &cancellables)
@@ -57,6 +68,7 @@ class DifferenceViewModel: ObservableObject {
     private func saveToDefaults() {
         UserDefaults.standard.set("\(fromValue)", forKey: "com.fromto.difference.fromValue")
         UserDefaults.standard.set("\(toValue)", forKey: "com.fromto.difference.toValue")
+        UserDefaults.standard.set(isRelativeMode, forKey: "com.fromto.difference.isRelativeMode")
     }
 
     private func loadFromDefaults() {
@@ -69,5 +81,7 @@ class DifferenceViewModel: ObservableObject {
            let value = Decimal(string: savedTo) {
             toValue = value
         }
+
+        isRelativeMode = UserDefaults.standard.bool(forKey: "com.fromto.difference.isRelativeMode")
     }
 }

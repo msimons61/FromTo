@@ -10,9 +10,17 @@ import SwiftUI
 struct DifferenceView: View {
     @StateObject private var viewModel = DifferenceViewModel()
     @FocusState private var focusedField: Field?
+    @State private var differenceMode: DifferenceMode = .absolute
 
     enum Field {
         case fromValue, toValue
+    }
+
+    enum DifferenceMode: String, CaseIterable, Identifiable {
+        case absolute = "Absolute"
+        case relative = "Relative"
+
+        var id: String { self.rawValue }
     }
 
     // MARK: - let values for keyboard buttons
@@ -32,7 +40,7 @@ struct DifferenceView: View {
                         DecimalTextFieldNonOptional(
                             label: "From",
                             value: $viewModel.fromValue,
-                            fractionDigits: 6
+                            fractionDigits: 38
                         )
                         .multilineTextAlignment(.trailing)
                         .focused($focusedField, equals: .fromValue)
@@ -41,45 +49,86 @@ struct DifferenceView: View {
                     HStack {
                         Text("To")
                         Spacer()
-                        DecimalTextFieldNonOptional(
-                            label: "To",
-                            value: $viewModel.toValue,
-                            fractionDigits: 6
-                        )
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .toValue)
+                        if differenceMode == .absolute {
+                            DecimalTextFieldNonOptional(
+                                label: "To",
+                                value: $viewModel.toValue,
+                                fractionDigits: 38
+                            )
+                            .multilineTextAlignment(.trailing)
+                            .focused($focusedField, equals: .toValue)
+                        } else {
+                            PercentageTextField(
+                                label: "To",
+                                value: $viewModel.toValue
+                            )
+                            .multilineTextAlignment(.trailing)
+                            .focused($focusedField, equals: .toValue)
+                        }
+                    }
+
+                    Picker("Mode", selection: $differenceMode) {
+                        ForEach(DifferenceMode.allCases) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: differenceMode) { _, newMode in
+                        viewModel.isRelativeMode = (newMode == .relative)
                     }
                 } header: {
                     HStack {
                         Text("Values")
                         Spacer()
-                        Button(action: {
-                            swapValues()
-                        }) {
-                            Image(systemName: "arrow.trianglehead.2.counterclockwise.rotate.90")
+                        if differenceMode == .absolute {
+                            Button(action: {
+                                swapValues()
+                            }) {
+                                Image(systemName: "arrow.trianglehead.2.counterclockwise.rotate.90")
+                            }
+                            .buttonStyle(.borderedProminent)
                         }
-                        .buttonStyle(.borderedProminent)
                     }
                 }
                 
                 // MARK: - Results Section
                 Section("Results") {
-                    HStack {
-                        Text("Absolute Difference")
-                        Spacer()
-                        Text(viewModel.absoluteDifference.formatted(fractionDigits: 6))
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    HStack {
-                        Text("Relative Difference")
-                        Spacer()
-                        Text(viewModel.relativeDifferenceFormatted)
-                            .foregroundColor(.secondary)
+                    if differenceMode == .absolute {
+                        HStack {
+                            Text("Absolute Difference")
+                            Spacer()
+                            Text(viewModel.absoluteDifferenceAbsolute.formatted())
+                                .foregroundColor(.secondary)
+                        }
+
+                        HStack {
+                            Text("Relative Difference")
+                            Spacer()
+                            Text(viewModel.relativeDifferenceAbsoluteFormatted)
+                                .foregroundColor(.secondary)
+                        }
+                    } else {
+                        HStack {
+                            Text("Absolute Difference")
+                            Spacer()
+                            Text(viewModel.absoluteDifferenceRelative.formatted())
+                                .foregroundColor(.secondary)
+                        }
+
+                        HStack {
+                            Text("Cumulative Difference")
+                            Spacer()
+                            Text(viewModel.cumulativeDifference.formatted())
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
             }
             .navigationTitle("Difference")
+            .onAppear {
+                // Sync differenceMode from viewModel on appear
+                differenceMode = viewModel.isRelativeMode ? .relative : .absolute
+            }
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Button(action: {
