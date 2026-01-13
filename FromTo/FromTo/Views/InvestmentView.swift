@@ -55,73 +55,84 @@ struct InvestmentView: View {
                 }
                 
                 // MARK: - Costs Section
-                Section {
-                    HStack {
-                        Text("Currency Rate")
-                        Spacer()
-                        DecimalTextFieldNonOptional(
-                            label: "Rate",
-                            value: $viewModel.currencyRate,
-                            fractionDigits: 6,
-                            includeGrouping: false
-                        )
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .currencyRate)
-                    }
-                    
-                    HStack {
-                        Text("Fixed Cost")
-                        Spacer()
-                        DecimalTextFieldNonOptional(
-                            label: "Fixed",
-                            value: $viewModel.fixedCost,
-                            fractionDigits: 2,
-                            suffix: settings.fromCurrency
-                        )
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .fixedCost)
-                    }
-                    
-                    HStack {
-                        Text("Variable Cost")
-                        Spacer()
-                        PercentageTextField(
-                            label: "Variable",
-                            value: $viewModel.variableCost
-                        )
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .variableCost)
-                    }
-                    
-                    HStack {
-                        Text("Maximum Cost")
-                        Spacer()
-                        DecimalTextField(
-                            label: "Maximum",
-                            value: $viewModel.maximumCost,
-                            fractionDigits: 2,
-                            suffix: settings.fromCurrency
-                        )
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .maximumCost)
-                    }
-                    
-                    HStack {
-                        Text("Total Cost")
-                        Spacer()
-                        Text(viewModel.totalCost.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + settings.fromCurrency)
-                            .foregroundColor(.secondary)
-                    }
-                } header: {
-                    HStack {
-                        Text("Costs")
-                        Spacer()
-                        Button(action: {
-                            viewModel.reloadCostsFromSettings()
-                        }) {
-                            Image(systemName: "arrow.counterclockwise")
+                // Show section if Double Currency OR Apply Cost is enabled (Scenarios 1, 2, 3)
+                // Hide section only when both are disabled (Scenario 4)
+                if settings.isDoubleCurrencyEnabled || settings.isApplyCostEnabled {
+                    Section {
+                        // Currency Rate: Show only when Double Currency is enabled (Scenarios 1, 2)
+                        if settings.isDoubleCurrencyEnabled {
+                            HStack {
+                                Text("Currency Rate")
+                                Spacer()
+                                DecimalTextFieldNonOptional(
+                                    label: "Rate",
+                                    value: $viewModel.currencyRate,
+                                    fractionDigits: 6,
+                                    includeGrouping: false
+                                )
+                                .multilineTextAlignment(.trailing)
+                                .focused($focusedField, equals: .currencyRate)
+                            }
                         }
-                        .buttonStyle(.borderedProminent)
+
+                        // Cost fields: Show only when Apply Cost is enabled (Scenarios 1, 3)
+                        if settings.isApplyCostEnabled {
+                            HStack {
+                                Text("Fixed Cost")
+                                Spacer()
+                                DecimalTextFieldNonOptional(
+                                    label: "Fixed",
+                                    value: $viewModel.fixedCost,
+                                    fractionDigits: 2,
+                                    suffix: settings.fromCurrency
+                                )
+                                .multilineTextAlignment(.trailing)
+                                .focused($focusedField, equals: .fixedCost)
+                            }
+
+                            HStack {
+                                Text("Variable Cost")
+                                Spacer()
+                                PercentageTextField(
+                                    label: "Variable",
+                                    value: $viewModel.variableCost
+                                )
+                                .multilineTextAlignment(.trailing)
+                                .focused($focusedField, equals: .variableCost)
+                            }
+
+                            HStack {
+                                Text("Maximum Cost")
+                                Spacer()
+                                DecimalTextField(
+                                    label: "Maximum",
+                                    value: $viewModel.maximumCost,
+                                    fractionDigits: 2,
+                                    suffix: settings.fromCurrency
+                                )
+                                .multilineTextAlignment(.trailing)
+                                .focused($focusedField, equals: .maximumCost)
+                            }
+
+                            HStack {
+                                Text("Total Cost")
+                                Spacer()
+                                Text(viewModel.totalCost.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + settings.fromCurrency)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    } header: {
+                        HStack {
+                            Text("Costs")
+                            Spacer()
+                            // Reload button: Show in all scenarios except Scenario 4
+                            Button(action: {
+                                viewModel.reloadCostsFromSettings()
+                            }) {
+                                Image(systemName: "arrow.counterclockwise")
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
                     }
                 }
                 
@@ -242,7 +253,8 @@ struct InvestmentView: View {
         case .currencyRate:
             focusedField = .stockPrice
         case .fixedCost:
-            focusedField = .currencyRate
+            // Go to currencyRate if Double Currency enabled, else go to stockPrice
+            focusedField = settings.isDoubleCurrencyEnabled ? .currencyRate : .stockPrice
         case .variableCost:
             focusedField = .fixedCost
         case .maximumCost:
@@ -257,9 +269,20 @@ struct InvestmentView: View {
         case .availableAmount:
             focusedField = .stockPrice
         case .stockPrice:
-            focusedField = .currencyRate
+            // Navigate based on what's visible in Costs section
+            if settings.isDoubleCurrencyEnabled {
+                // Double Currency is ON, go to Currency Rate
+                focusedField = .currencyRate
+            } else if settings.isApplyCostEnabled {
+                // Double Currency is OFF but Apply Cost is ON, go to Fixed Cost
+                focusedField = .fixedCost
+            } else {
+                // Both are OFF (Scenario 4), Costs section is hidden, dismiss keyboard
+                focusedField = nil
+            }
         case .currencyRate:
-            focusedField = .fixedCost
+            // Go to fixedCost if Apply Cost enabled, else dismiss keyboard
+            focusedField = settings.isApplyCostEnabled ? .fixedCost : nil
         case .fixedCost:
             focusedField = .variableCost
         case .variableCost:

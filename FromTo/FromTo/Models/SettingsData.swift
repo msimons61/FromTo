@@ -16,10 +16,25 @@ class SettingsData: ObservableObject {
         }
     }
 
+    @Published var isDoubleCurrencyEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isDoubleCurrencyEnabled, forKey: "com.fromto.settings.isDoubleCurrencyEnabled")
+            syncCurrenciesIfNeeded()
+        }
+    }
+
+    @Published var isApplyCostEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isApplyCostEnabled, forKey: "com.fromto.settings.isApplyCostEnabled")
+            resetCostsIfNeeded()
+        }
+    }
+
     @Published var fromCurrency: String {
         didSet {
             UserDefaults.standard.set(fromCurrency, forKey: "com.fromto.settings.fromCurrency")
             updateCurrencyRateIfNeeded()
+            syncCurrenciesIfNeeded()
         }
     }
 
@@ -85,6 +100,19 @@ class SettingsData: ObservableObject {
             self.displayMode = .system
         }
 
+        // Use object(forKey:) to distinguish "not set" from "false" for default=true
+        if let saved = UserDefaults.standard.object(forKey: "com.fromto.settings.isDoubleCurrencyEnabled") as? Bool {
+            self.isDoubleCurrencyEnabled = saved
+        } else {
+            self.isDoubleCurrencyEnabled = true
+        }
+
+        if let saved = UserDefaults.standard.object(forKey: "com.fromto.settings.isApplyCostEnabled") as? Bool {
+            self.isApplyCostEnabled = saved
+        } else {
+            self.isApplyCostEnabled = true
+        }
+
         self.fromCurrency = UserDefaults.standard.string(forKey: "com.fromto.settings.fromCurrency") ?? "USD"
         self.toCurrency = UserDefaults.standard.string(forKey: "com.fromto.settings.toCurrency") ?? "EUR"
 
@@ -121,6 +149,21 @@ class SettingsData: ObservableObject {
     private func updateCurrencyRateIfNeeded() {
         if fromCurrency == toCurrency {
             currencyRate = 1.0
+        }
+    }
+
+    private func syncCurrenciesIfNeeded() {
+        if !isDoubleCurrencyEnabled {
+            toCurrency = fromCurrency
+            // currencyRate will be set to 1.0 automatically via updateCurrencyRateIfNeeded()
+        }
+    }
+
+    private func resetCostsIfNeeded() {
+        if !isApplyCostEnabled {
+            defaultFixedCost = 0
+            defaultVariableCost = 0
+            defaultMaximumCost = nil
         }
     }
 }

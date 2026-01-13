@@ -50,6 +50,30 @@ class InvestmentViewModel: ObservableObject {
         loadFromDefaults()
         loadDefaultCosts()
         setupPersistence()
+
+        // Observe settings toggle changes for auto-sync
+        settings.$isApplyCostEnabled
+            .sink { [weak self] isEnabled in
+                guard let self = self else { return }
+                if !isEnabled {
+                    // Auto-sync costs to 0 when Apply Cost is disabled
+                    self.fixedCost = 0
+                    self.variableCost = 0
+                    self.maximumCost = nil
+                }
+            }
+            .store(in: &cancellables)
+
+        settings.$isDoubleCurrencyEnabled
+            .sink { [weak self] isEnabled in
+                guard let self = self else { return }
+                if !isEnabled {
+                    // Auto-sync currency rate when Double Currency is disabled
+                    self.currencyRate = 1.0
+                }
+            }
+            .store(in: &cancellables)
+
         isInitialized = true
         recalculate()
     }

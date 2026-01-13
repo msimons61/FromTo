@@ -41,106 +41,122 @@ struct SettingsView: View {
                 
                 // MARK: - Currency Section
                 Section {
+                    Toggle("Double Currency", isOn: $settings.isDoubleCurrencyEnabled)
+
+                    Toggle("Apply Cost", isOn: $settings.isApplyCostEnabled)
+
                     NavigationLink(destination: CurrencySelectionView(
                         selectedCurrency: $settings.fromCurrency,
                         availableCurrencies: settings.availableCurrencies,
-                        title: "From Currency"
+                        title: settings.isDoubleCurrencyEnabled ? "From Currency" : "Currency"
                     )) {
                         HStack {
-                            Text("From Currency")
+                            Text(settings.isDoubleCurrencyEnabled ? "From Currency" : "Currency")
                             Spacer()
                             Text(settings.fromCurrency)
                                 .foregroundColor(.secondary)
                         }
                     }
 
-                    NavigationLink(destination: CurrencySelectionView(
-                        selectedCurrency: $settings.toCurrency,
-                        availableCurrencies: settings.availableCurrencies,
-                        title: "To Currency"
-                    )) {
-                        HStack {
-                            Text("To Currency")
-                            Spacer()
-                            Text(settings.toCurrency)
-                                .foregroundColor(.secondary)
+                    if settings.isDoubleCurrencyEnabled {
+                        NavigationLink(destination: CurrencySelectionView(
+                            selectedCurrency: $settings.toCurrency,
+                            availableCurrencies: settings.availableCurrencies,
+                            title: "To Currency"
+                        )) {
+                            HStack {
+                                Text("To Currency")
+                                Spacer()
+                                Text(settings.toCurrency)
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
 
-                    HStack {
-                        Text("Currency Rate")
-                        Spacer()
-                        DecimalTextFieldNonOptional(
-                            label: "Rate",
-                            value: Binding(
-                                get: { settings.currencyRate },
-                                set: { settings.currencyRate = $0 }
-                            ),
-                            fractionDigits: 6,
-                            includeGrouping: false
-                        )
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .currencyRate)
+                    if settings.isDoubleCurrencyEnabled {
+                        HStack {
+                            Text("Currency Rate")
+                            Spacer()
+                            DecimalTextFieldNonOptional(
+                                label: "Rate",
+                                value: Binding(
+                                    get: { settings.currencyRate },
+                                    set: { settings.currencyRate = $0 }
+                                ),
+                                fractionDigits: 6,
+                                includeGrouping: false
+                            )
+                            .multilineTextAlignment(.trailing)
+                            .focused($focusedField, equals: .currencyRate)
+                        }
                     }
                 } header: {
                     HStack {
                         Text("Currency")
                         Spacer()
-                        Button(action: {
-                            swapCurrencies()
-                        }) {
-                            Image(systemName: "arrow.trianglehead.2.counterclockwise.rotate.90")
+                        if settings.isDoubleCurrencyEnabled {
+                            Button(action: {
+                                swapCurrencies()
+                            }) {
+                                Image(systemName: "arrow.trianglehead.2.counterclockwise.rotate.90")
+                            }
+                            .buttonStyle(.borderedProminent)
                         }
-                        .buttonStyle(.borderedProminent)
                     }
                 }
                 
                 // MARK: - Default Cost Section
                 Section("Default Cost") {
-                    HStack {
-                        Text("Fixed Cost")
-                        Spacer()
-                        DecimalTextFieldNonOptional(
-                            label: "Fixed",
-                            value: Binding(
-                                get: { settings.defaultFixedCost },
-                                set: { settings.defaultFixedCost = $0 }
-                            ),
-                            fractionDigits: 2,
-                            suffix: settings.fromCurrency
-                        )
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .fixedCost)
-                    }
-                    
-                    HStack {
-                        Text("Variable Cost")
-                        Spacer()
-                        PercentageTextField(
-                            label: "Variable",
-                            value: Binding(
-                                get: { settings.defaultVariableCost },
-                                set: { settings.defaultVariableCost = $0 }
+                    if settings.isApplyCostEnabled {
+                        HStack {
+                            Text("Fixed Cost")
+                            Spacer()
+                            DecimalTextFieldNonOptional(
+                                label: "Fixed",
+                                value: Binding(
+                                    get: { settings.defaultFixedCost },
+                                    set: { settings.defaultFixedCost = $0 }
+                                ),
+                                fractionDigits: 2,
+                                suffix: settings.fromCurrency
                             )
-                        )
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .variableCost)
-                    }
-                    
-                    HStack {
-                        Text("Maximum Cost")
-                        Spacer()
-                        DecimalTextField(
-                            label: "Maximum",
-                            value: Binding(
-                                get: { settings.defaultMaximumCost },
-                                set: { settings.defaultMaximumCost = $0 }
-                            ),
-                            fractionDigits: 2,
-                            suffix: settings.fromCurrency
-                        )
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .maximumCost)
+                            .multilineTextAlignment(.trailing)
+                            .focused($focusedField, equals: .fixedCost)
+                        }
+
+                        HStack {
+                            Text("Variable Cost")
+                            Spacer()
+                            PercentageTextField(
+                                label: "Variable",
+                                value: Binding(
+                                    get: { settings.defaultVariableCost },
+                                    set: { settings.defaultVariableCost = $0 }
+                                )
+                            )
+                            .multilineTextAlignment(.trailing)
+                            .focused($focusedField, equals: .variableCost)
+                        }
+
+                        HStack {
+                            Text("Maximum Cost")
+                            Spacer()
+                            DecimalTextField(
+                                label: "Maximum",
+                                value: Binding(
+                                    get: { settings.defaultMaximumCost },
+                                    set: { settings.defaultMaximumCost = $0 }
+                                ),
+                                fractionDigits: 2,
+                                suffix: settings.fromCurrency
+                            )
+                            .multilineTextAlignment(.trailing)
+                            .focused($focusedField, equals: .maximumCost)
+                        }
+                    } else {
+                        Text("Cost application is disabled")
+                            .foregroundColor(.secondary)
+                            .italic()
                     }
                 }
 
@@ -243,7 +259,8 @@ struct SettingsView: View {
         case .currencyRate:
             focusedField = nil // First field, no previous
         case .fixedCost:
-            focusedField = .currencyRate
+            // Go to currencyRate if Double Currency enabled, else no previous
+            focusedField = settings.isDoubleCurrencyEnabled ? .currencyRate : nil
         case .variableCost:
             focusedField = .fixedCost
         case .maximumCost:
@@ -256,7 +273,8 @@ struct SettingsView: View {
 
         switch current {
         case .currencyRate:
-            focusedField = .fixedCost
+            // Go to fixedCost if Apply Cost enabled, else dismiss keyboard
+            focusedField = settings.isApplyCostEnabled ? .fixedCost : nil
         case .fixedCost:
             focusedField = .variableCost
         case .variableCost:
