@@ -16,7 +16,16 @@ struct SettingsView: View {
     let opacityValue: Double = 0.2
     let hPadding: CGFloat = 10
     let vPadding: CGFloat = 8
-    
+
+    // MARK: - App Information
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown"
+    }
+
+    private var appBuild: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -132,6 +141,23 @@ struct SettingsView: View {
                         )
                         .multilineTextAlignment(.trailing)
                         .focused($focusedField, equals: .maximumCost)
+                    }
+                }
+
+                // MARK: - Information Section
+                Section("Information") {
+                    HStack {
+                        Text("Version")
+                        Spacer()
+                        Text(appVersion)
+                            .foregroundColor(.secondary)
+                    }
+
+                    HStack {
+                        Text("Build")
+                        Spacer()
+                        Text(appBuild)
+                            .foregroundColor(.secondary)
                     }
                 }
             }
