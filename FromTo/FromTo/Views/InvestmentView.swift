@@ -11,9 +11,11 @@ struct InvestmentView: View {
     @StateObject private var viewModel: InvestmentViewModel
     @EnvironmentObject var settings: SettingsData
     @FocusState private var focusedField: Field?
+    let tab: AppTab
 
-    init(settings: SettingsData) {
+    init(settings: SettingsData, tab: AppTab) {
         _viewModel = StateObject(wrappedValue: InvestmentViewModel(settings: settings))
+        self.tab = tab
     }
 
     // MARK: - let values for keyboard buttons
@@ -26,7 +28,7 @@ struct InvestmentView: View {
         NavigationStack {
             Form {
                 // MARK: - Investment Details Section
-                Section("Investment Details") {
+                Section {
                     HStack {
                         Text("Available Amount")
                         Spacer()
@@ -34,12 +36,13 @@ struct InvestmentView: View {
                             label: "Amount",
                             value: $viewModel.availableAmount,
                             fractionDigits: 2,
-                            suffix: settings.fromCurrency
+                            suffix: settings.fromCurrency,
+                            tab: tab
                         )
                         .multilineTextAlignment(.trailing)
                         .focused($focusedField, equals: .availableAmount)
                     }
-                    
+
                     HStack {
                         Text("Stock Price")
                         Spacer()
@@ -47,11 +50,15 @@ struct InvestmentView: View {
                             label: "Price",
                             value: $viewModel.stockPrice,
                             fractionDigits: 2,
-                            suffix: settings.toCurrency
+                            suffix: settings.toCurrency,
+                            tab: tab
                         )
                         .multilineTextAlignment(.trailing)
                         .focused($focusedField, equals: .stockPrice)
                     }
+                } header: {
+                    Text("Investment Details")
+                        .foregroundStyle(tab.color())
                 }
                 
                 // MARK: - Costs Section
@@ -68,7 +75,8 @@ struct InvestmentView: View {
                                     label: "Rate",
                                     value: $viewModel.currencyRate,
                                     fractionDigits: 6,
-                                    includeGrouping: false
+                                    includeGrouping: false,
+                                    tab: tab
                                 )
                                 .multilineTextAlignment(.trailing)
                                 .focused($focusedField, equals: .currencyRate)
@@ -84,7 +92,8 @@ struct InvestmentView: View {
                                     label: "Fixed",
                                     value: $viewModel.fixedCost,
                                     fractionDigits: 2,
-                                    suffix: settings.fromCurrency
+                                    suffix: settings.fromCurrency,
+                                    tab: tab
                                 )
                                 .multilineTextAlignment(.trailing)
                                 .focused($focusedField, equals: .fixedCost)
@@ -95,6 +104,7 @@ struct InvestmentView: View {
                                 Spacer()
                                 PercentageTextField(
                                     label: "Variable",
+                                    tab: tab,
                                     value: $viewModel.variableCost
                                 )
                                 .multilineTextAlignment(.trailing)
@@ -124,6 +134,7 @@ struct InvestmentView: View {
                     } header: {
                         HStack {
                             Text("Costs")
+                                .foregroundStyle(tab.color())
                             Spacer()
                             // Reload button: Show in all scenarios except Scenario 4
                             Button(action: {
@@ -131,27 +142,27 @@ struct InvestmentView: View {
                             }) {
                                 Image(systemName: "arrow.counterclockwise")
                             }
-                            .buttonStyle(.borderedProminent)
+                            .circleBackground(fgColor: tab.color(), font: .body.bold(), size: 5)
                         }
                     }
                 }
-                
+
                 // MARK: - Results Section
-                Section("Results") {
+                Section {
                     HStack {
                         Text("Investable Amount")
                         Spacer()
                         Text(viewModel.investableAmount.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + settings.toCurrency)
                             .foregroundColor(.secondary)
                     }
-                    
+
                     HStack {
                         Text("Number of Stocks")
                         Spacer()
                         Text("\(viewModel.numberOfStocks)")
                             .foregroundColor(.secondary)
                     }
-                    
+
                     HStack {
                         Text("Invested Amount")
                         Spacer()
@@ -165,6 +176,9 @@ struct InvestmentView: View {
                         Text(viewModel.remainingAmount.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + settings.toCurrency)
                             .foregroundColor(.secondary)
                     }
+                } header: {
+                    Text("Results")
+                        .foregroundStyle(tab.color())
                 }
             }
             .navigationTitle("Investment")
@@ -174,53 +188,38 @@ struct InvestmentView: View {
                         clearCurrentField()
                     }) {
                         Text("Clear")
-                            .foregroundColor(.red)
-                            .padding(.horizontal, hPadding)
-                            .padding(.vertical, vPadding)
-                            .background(Capsule().fill(.red).opacity(opacityValue))
-                    }
-                    
+                        .kbCapsuleBackground(color: .red)                    }
+
                     Spacer()
-                    
+
                     Button(action: {
                         moveToPreviousField()
                     }) {
                         Image(systemName: "chevron.up")
-                            .foregroundColor(.teal)
-                            .frame(width: circleFrameSize, height: circleFrameSize, alignment: .center)
-                            .background(Circle().fill(.teal).opacity(opacityValue))
-                        
-                    }
+                        .kbCapsuleBackground(color: .teal)                    }
                     .disabled(focusedField == .availableAmount || focusedField == nil)
-                    
+
                     Button(action: {
                         moveToNextField()
                     }) {
                         Image(systemName: "chevron.down")
-                            .foregroundColor(.blue)
-                            .frame(width: circleFrameSize, height: circleFrameSize, alignment: .center)
-                            .background(Circle().fill(.blue).opacity(opacityValue))
-                    }
+                        .kbCapsuleBackground(color: .blue)                    }
                     .disabled(focusedField == .maximumCost || focusedField == nil)
-                    
+
                     Button(action: {
                         focusedField = nil
                     }) {
                         Text("Done")
-                            .foregroundColor(.green)
-                            .padding(.horizontal, hPadding)
-                            .padding(.vertical, vPadding)
-                            .background(Capsule().fill(.green).opacity(opacityValue))
-                    }
+                        .kbCapsuleBackground(color: .green)                    }
                 }
             }
+            .tint(tab.color())
         }
     }
 
     enum Field {
         case availableAmount, stockPrice, currencyRate, fixedCost, variableCost, maximumCost
     }
-    
 
     // MARK: - Helper Methods
     private func clearCurrentField() {
@@ -247,7 +246,7 @@ struct InvestmentView: View {
 
         switch current {
         case .availableAmount:
-            focusedField = nil // First field, no previous
+            focusedField = nil  // First field, no previous
         case .stockPrice:
             focusedField = .availableAmount
         case .currencyRate:
@@ -288,14 +287,13 @@ struct InvestmentView: View {
         case .variableCost:
             focusedField = .maximumCost
         case .maximumCost:
-            focusedField = nil // Last field, dismiss keyboard
+            focusedField = nil  // Last field, dismiss keyboard
         }
     }
-
 
 }
 
 #Preview {
-    InvestmentView(settings: SettingsData())
+    InvestmentView(settings: SettingsData(), tab: .investment)
         .environmentObject(SettingsData())
 }

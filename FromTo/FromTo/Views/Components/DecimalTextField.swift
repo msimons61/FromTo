@@ -13,6 +13,7 @@ struct DecimalTextField: View {
     let fractionDigits: Int
     let includeGrouping: Bool
     let suffix: String?
+    let tab: AppTab
 
     @State private var textValue: String = ""
     @FocusState private var isFocused: Bool
@@ -24,13 +25,15 @@ struct DecimalTextField: View {
         value: Binding<Decimal?>,
         fractionDigits: Int = 2,
         includeGrouping: Bool = true,
-        suffix: String? = nil
+        suffix: String? = nil,
+        tab: AppTab = .investment
     ) {
         self.label = label
         self._value = value
         self.fractionDigits = fractionDigits
         self.includeGrouping = includeGrouping
         self.suffix = suffix
+        self.tab = tab
     }
 
     var body: some View {
@@ -102,8 +105,8 @@ struct DecimalTextField: View {
                     value = nil
                     isFocused = true
                 }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+                    Image(systemName: "xmark")
+                        .circleBackground(fgColor: tab.color())
                 }
                 .buttonStyle(.plain)
             }
@@ -118,6 +121,7 @@ struct DecimalTextFieldNonOptional: View {
     let fractionDigits: Int
     let includeGrouping: Bool
     let suffix: String?
+    let tab: AppTab
 
     @State private var textValue: String = ""
     @FocusState private var isFocused: Bool
@@ -129,13 +133,15 @@ struct DecimalTextFieldNonOptional: View {
         value: Binding<Decimal>,
         fractionDigits: Int = 2,
         includeGrouping: Bool = true,
-        suffix: String? = nil
+        suffix: String? = nil,
+        tab: AppTab
     ) {
         self.label = label
         self._value = value
         self.fractionDigits = fractionDigits
         self.includeGrouping = includeGrouping
         self.suffix = suffix
+        self.tab = tab
     }
 
     var body: some View {
@@ -162,7 +168,7 @@ struct DecimalTextFieldNonOptional: View {
                         value,
                         fractionDigits: fractionDigits,
                         includeGrouping: includeGrouping,
-                        enforceMinimumDigits: suffix != nil
+                        enforceMinimumDigits: suffix != nil,
                     )
                 }
             }
@@ -201,8 +207,8 @@ struct DecimalTextFieldNonOptional: View {
                     value = 0
                     isFocused = true
                 }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+                    Image(systemName: "xmark")
+                        .circleBackground(fgColor: tab.color())
                 }
                 .buttonStyle(.plain)
             }

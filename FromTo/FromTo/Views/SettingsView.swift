@@ -10,12 +10,13 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject var settings: SettingsData
     @FocusState private var focusedField: Field?
+    let tab: AppTab
 
     // MARK: - let values for keyboard buttons
-    let circleFrameSize: CGFloat = 40
-    let opacityValue: Double = 0.2
-    let hPadding: CGFloat = 10
-    let vPadding: CGFloat = 8
+//    let circleFrameSize: CGFloat = 40
+//    let opacityValue: Double = 0.2
+//    let hPadding: CGFloat = 10
+//    let vPadding: CGFloat = 8
 
     // MARK: - App Information
     private var appVersion: String {
@@ -30,26 +31,31 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 // MARK: - Appearance Section
-                Section("Appearance") {
+                Section {
                     Picker("Display Mode", selection: $settings.displayMode) {
                         ForEach(DisplayMode.allCases) { mode in
                             Text(mode.rawValue).tag(mode)
                         }
                     }
                     .pickerStyle(.segmented)
+                    .colorMultiply(tab.color())
+                } header: {
+                    Text("Appearance")
+                        .foregroundStyle(tab.color())
                 }
-                
+
                 // MARK: - Currency Section
                 Section {
                     Toggle("Double Currency", isOn: $settings.isDoubleCurrencyEnabled)
 
-                    Toggle("Apply Cost", isOn: $settings.isApplyCostEnabled)
-
-                    NavigationLink(destination: CurrencySelectionView(
-                        selectedCurrency: $settings.fromCurrency,
-                        availableCurrencies: settings.availableCurrencies,
-                        title: settings.isDoubleCurrencyEnabled ? "From Currency" : "Currency"
-                    )) {
+                    NavigationLink(
+                        destination: CurrencySelectionView(
+                            selectedCurrency: $settings.fromCurrency,
+                            availableCurrencies: settings.availableCurrencies,
+                            title: settings.isDoubleCurrencyEnabled ? "From Currency" : "Currency",
+                            tab: tab
+                        )
+                    ) {
                         HStack {
                             Text(settings.isDoubleCurrencyEnabled ? "From Currency" : "Currency")
                             Spacer()
@@ -59,11 +65,14 @@ struct SettingsView: View {
                     }
 
                     if settings.isDoubleCurrencyEnabled {
-                        NavigationLink(destination: CurrencySelectionView(
-                            selectedCurrency: $settings.toCurrency,
-                            availableCurrencies: settings.availableCurrencies,
-                            title: "To Currency"
-                        )) {
+                        NavigationLink(
+                            destination: CurrencySelectionView(
+                                selectedCurrency: $settings.toCurrency,
+                                availableCurrencies: settings.availableCurrencies,
+                                title: "To Currency",
+                                tab: tab
+                            )
+                        ) {
                             HStack {
                                 Text("To Currency")
                                 Spacer()
@@ -84,7 +93,8 @@ struct SettingsView: View {
                                     set: { settings.currencyRate = $0 }
                                 ),
                                 fractionDigits: 6,
-                                includeGrouping: false
+                                includeGrouping: false,
+                                tab: tab
                             )
                             .multilineTextAlignment(.trailing)
                             .focused($focusedField, equals: .currencyRate)
@@ -93,20 +103,23 @@ struct SettingsView: View {
                 } header: {
                     HStack {
                         Text("Currency")
+                            .foregroundStyle(tab.color())
                         Spacer()
                         if settings.isDoubleCurrencyEnabled {
                             Button(action: {
                                 swapCurrencies()
                             }) {
                                 Image(systemName: "arrow.trianglehead.2.counterclockwise.rotate.90")
+                                    .circleBackground(fgColor: tab.color(), font: .body.bold(), size: 5)
                             }
-                            .buttonStyle(.borderedProminent)
                         }
                     }
                 }
-                
+
                 // MARK: - Default Cost Section
-                Section("Default Cost") {
+                Section {
+                    Toggle("Apply Cost", isOn: $settings.isApplyCostEnabled)
+
                     if settings.isApplyCostEnabled {
                         HStack {
                             Text("Fixed Cost")
@@ -118,7 +131,8 @@ struct SettingsView: View {
                                     set: { settings.defaultFixedCost = $0 }
                                 ),
                                 fractionDigits: 2,
-                                suffix: settings.fromCurrency
+                                suffix: settings.fromCurrency,
+                                tab: tab
                             )
                             .multilineTextAlignment(.trailing)
                             .focused($focusedField, equals: .fixedCost)
@@ -129,6 +143,7 @@ struct SettingsView: View {
                             Spacer()
                             PercentageTextField(
                                 label: "Variable",
+                                tab: tab,
                                 value: Binding(
                                     get: { settings.defaultVariableCost },
                                     set: { settings.defaultVariableCost = $0 }
@@ -158,10 +173,13 @@ struct SettingsView: View {
                             .foregroundColor(.secondary)
                             .italic()
                     }
+                } header: {
+                    Text("Default Cost")
+                        .foregroundStyle(tab.color())
                 }
 
                 // MARK: - Information Section
-                Section("Information") {
+                Section {
                     HStack {
                         Text("Version")
                         Spacer()
@@ -175,6 +193,9 @@ struct SettingsView: View {
                         Text(appBuild)
                             .foregroundColor(.secondary)
                     }
+                } header: {
+                    Text("Information")
+                        .foregroundStyle(tab.color())
                 }
             }
             .navigationTitle("Settings")
@@ -184,52 +205,43 @@ struct SettingsView: View {
                         clearCurrentField()
                     }) {
                         Text("Clear")
-                            .foregroundColor(.red)
-                            .padding(.horizontal, hPadding)
-                            .padding(.vertical, vPadding)
-                            .background(Capsule().fill(.red).opacity(opacityValue))
+                            .kbCapsuleBackground(color: .red)
                     }
-                    
+
                     Spacer()
-                    
+
                     Button(action: {
                         moveToPreviousField()
                     }) {
                         Image(systemName: "chevron.up")
-                            .foregroundColor(.teal)
-                            .frame(width: circleFrameSize, height: circleFrameSize, alignment: .center)
-                            .background(Circle().fill(.teal).opacity(opacityValue))
+                            .kbCapsuleBackground(color: .teal)
                     }
                     .disabled(focusedField == .currencyRate || focusedField == nil)
-                    
+
                     Button(action: {
                         moveToNextField()
                     }) {
                         Image(systemName: "chevron.down")
-                            .foregroundColor(.blue)
-                            .frame(width: circleFrameSize, height: circleFrameSize, alignment: .center)
-                            .background(Circle().fill(.blue).opacity(opacityValue))
+                            .kbCapsuleBackground(color: .blue)
                     }
                     .disabled(focusedField == .maximumCost || focusedField == nil)
-                    
+
                     Button(action: {
                         focusedField = nil
                     }) {
                         Text("Done")
-                            .foregroundColor(.green)
-                            .padding(.horizontal, hPadding)
-                            .padding(.vertical, vPadding)
-                            .background(Capsule().fill(.green).opacity(opacityValue))
+                            .kbCapsuleBackground(color: .green)
                     }
                 }
             }
+            .tint(tab.color())
         }
     }
-    
+
     enum Field {
         case currencyRate, fixedCost, variableCost, maximumCost
     }
-    
+
     // MARK: - Helper Methods
     private func swapCurrencies() {
         let temp = settings.fromCurrency
@@ -257,7 +269,7 @@ struct SettingsView: View {
 
         switch current {
         case .currencyRate:
-            focusedField = nil // First field, no previous
+            focusedField = nil  // First field, no previous
         case .fixedCost:
             // Go to currencyRate if Double Currency enabled, else no previous
             focusedField = settings.isDoubleCurrencyEnabled ? .currencyRate : nil
@@ -280,14 +292,12 @@ struct SettingsView: View {
         case .variableCost:
             focusedField = .maximumCost
         case .maximumCost:
-            focusedField = nil // Last field, dismiss keyboard
+            focusedField = nil  // Last field, dismiss keyboard
         }
     }
-
-
 }
 
 #Preview {
-    SettingsView()
+    SettingsView(tab: .settings)
         .environmentObject(SettingsData())
 }

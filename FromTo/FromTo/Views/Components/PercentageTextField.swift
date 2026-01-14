@@ -9,6 +9,8 @@ import SwiftUI
 
 struct PercentageTextField: View {
     let label: String
+    let tab: AppTab
+    
     @Binding var value: Decimal
 
     @State private var textValue: String = ""
@@ -16,8 +18,9 @@ struct PercentageTextField: View {
 
     private let formatter = DecimalFormatterUtility.shared
 
-    init(label: String, value: Binding<Decimal>) {
+    init(label: String, tab: AppTab, value: Binding<Decimal>) {
         self.label = label
+        self.tab = tab
         self._value = value
     }
 
@@ -78,8 +81,8 @@ struct PercentageTextField: View {
                     value = 0
                     isFocused = true
                 }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+                    Image(systemName: "xmark")
+                        .circleBackground(fgColor: tab.color())
                 }
                 .buttonStyle(.plain)
             }
@@ -95,6 +98,8 @@ struct PercentageTextField: View {
 // MARK: - Optional Percentage TextField
 struct PercentageTextFieldOptional: View {
     let label: String
+    let tab: AppTab
+    
     @Binding var value: Decimal?
 
     @State private var textValue: String = ""
@@ -102,8 +107,9 @@ struct PercentageTextFieldOptional: View {
 
     private let formatter = DecimalFormatterUtility.shared
 
-    init(label: String, value: Binding<Decimal?>) {
+    init(label: String, tab: AppTab, value: Binding<Decimal?>) {
         self.label = label
+        self.tab = tab
         self._value = value
     }
 
@@ -167,8 +173,12 @@ struct PercentageTextFieldOptional: View {
                     value = nil
                     isFocused = true
                 }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+                    Image(systemName: "xmark")
+                        .foregroundColor(tab.color())
+                        .font(.caption)
+                        .padding(5)
+                        .background(Color(.tertiarySystemBackground))
+                        .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
             }

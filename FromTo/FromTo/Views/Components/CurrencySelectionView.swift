@@ -10,8 +10,10 @@ import SwiftUI
 struct CurrencySelectionView: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var selectedCurrency: String
+
     let availableCurrencies: [String]
     let title: String
+    let tab: AppTab
 
     @State private var searchText = ""
 
@@ -21,8 +23,7 @@ struct CurrencySelectionView: View {
         } else {
             return availableCurrencies.filter { currency in
                 let currencyName = Locale.current.localizedString(forCurrencyCode: currency) ?? currency
-                return currency.localizedCaseInsensitiveContains(searchText) ||
-                       currencyName.localizedCaseInsensitiveContains(searchText)
+                return currency.localizedCaseInsensitiveContains(searchText) || currencyName.localizedCaseInsensitiveContains(searchText)
             }
         }
     }
@@ -43,8 +44,8 @@ struct CurrencySelectionView: View {
                     Button(action: {
                         searchText = ""
                     }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
+                        Image(systemName: "xmark")
+                            .circleBackground(fgColor: tab.color())
                     }
                 }
             }
@@ -65,7 +66,7 @@ struct CurrencySelectionView: View {
                                 Text(currency)
                                     .foregroundColor(.primary)
                                     .font(.body)
-                                HStack{
+                                HStack {
                                     Spacer()
                                     Text(currencyName(for: currency))
                                         .foregroundColor(.secondary)
@@ -93,7 +94,8 @@ struct CurrencySelectionView: View {
         CurrencySelectionView(
             selectedCurrency: .constant("USD"),
             availableCurrencies: Locale.commonISOCurrencyCodes.sorted(),
-            title: "Select Currency"
+            title: "Select Currency",
+            tab: .settings
         )
     }
 }

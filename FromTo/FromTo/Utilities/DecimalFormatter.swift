@@ -60,7 +60,7 @@ struct DecimalFormatterUtility {
     // Generate locale-aware placeholder
     func placeholder(fractionDigits: Int = 2) -> String {
         let decimalSeparator = Locale.current.decimalSeparator ?? "."
-        let groupingSeparator = Locale.current.groupingSeparator ?? ","
+//        let groupingSeparator = Locale.current.groupingSeparator ?? ","
 
         if fractionDigits == 0 {
             return "0"

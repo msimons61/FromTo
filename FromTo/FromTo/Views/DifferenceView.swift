@@ -11,6 +11,9 @@ struct DifferenceView: View {
     @StateObject private var viewModel = DifferenceViewModel()
     @FocusState private var focusedField: Field?
     @State private var differenceMode: DifferenceMode = .absolute
+    let tab: AppTab
+    var hPadding: CGFloat = 10
+    var vPadding: CGFloat = 8
 
     enum Field {
         case fromValue, toValue
@@ -26,8 +29,6 @@ struct DifferenceView: View {
     // MARK: - let values for keyboard buttons
     let circleFrameSize: CGFloat = 40
     let opacityValue: Double = 0.2
-    let hPadding: CGFloat = 10
-    let vPadding: CGFloat = 8
 
     var body: some View {
         NavigationStack {
@@ -40,7 +41,8 @@ struct DifferenceView: View {
                         DecimalTextFieldNonOptional(
                             label: "From",
                             value: $viewModel.fromValue,
-                            fractionDigits: 38
+                            fractionDigits: 38,
+                            tab: tab
                         )
                         .multilineTextAlignment(.trailing)
                         .focused($focusedField, equals: .fromValue)
@@ -53,13 +55,15 @@ struct DifferenceView: View {
                             DecimalTextFieldNonOptional(
                                 label: "To",
                                 value: $viewModel.toValue,
-                                fractionDigits: 38
+                                fractionDigits: 38,
+                                tab: tab
                             )
                             .multilineTextAlignment(.trailing)
                             .focused($focusedField, equals: .toValue)
                         } else {
                             PercentageTextField(
                                 label: "To",
+                                tab:tab,
                                 value: $viewModel.toValue
                             )
                             .multilineTextAlignment(.trailing)
@@ -68,31 +72,34 @@ struct DifferenceView: View {
                     }
 
                     Picker("Mode", selection: $differenceMode) {
+                        
                         ForEach(DifferenceMode.allCases) { mode in
                             Text(mode.rawValue).tag(mode)
                         }
                     }
                     .pickerStyle(.segmented)
+                    .colorMultiply(tab.color())
                     .onChange(of: differenceMode) { _, newMode in
                         viewModel.isRelativeMode = (newMode == .relative)
                     }
                 } header: {
                     HStack {
                         Text("Values")
+                            .foregroundStyle(tab.color())
                         Spacer()
                         if differenceMode == .absolute {
                             Button(action: {
                                 swapValues()
                             }) {
                                 Image(systemName: "arrow.trianglehead.2.counterclockwise.rotate.90")
+                                    .circleBackground(fgColor: tab.color(), font: .body.bold(), size: 5)
                             }
-                            .buttonStyle(.borderedProminent)
                         }
                     }
                 }
-                
+
                 // MARK: - Results Section
-                Section("Results") {
+                Section {
                     if differenceMode == .absolute {
                         HStack {
                             Text("Absolute Difference")
@@ -122,6 +129,9 @@ struct DifferenceView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
+                } header: {
+                    Text("Results")
+                        .foregroundStyle(tab.color())
                 }
             }
             .navigationTitle("Difference")
@@ -135,10 +145,7 @@ struct DifferenceView: View {
                         clearCurrentField()
                     }) {
                         Text("Clear")
-                            .foregroundColor(.red)
-                            .padding(.horizontal, hPadding)
-                            .padding(.vertical, vPadding)
-                            .background(Capsule().fill(.red).opacity(opacityValue))
+                            .kbCapsuleBackground(color: .red)
                     }
                     
                     Spacer()
@@ -147,9 +154,7 @@ struct DifferenceView: View {
                         moveToPreviousField()
                     }) {
                         Image(systemName: "chevron.up")
-                            .foregroundColor(.teal)
-                            .frame(width: circleFrameSize, height: circleFrameSize, alignment: .center)
-                            .background(Circle().fill(.teal).opacity(opacityValue))
+                            .kbCapsuleBackground(color: .teal)
                     }
                     .disabled(focusedField == .fromValue || focusedField == nil)
                     
@@ -157,9 +162,7 @@ struct DifferenceView: View {
                         moveToNextField()
                     }) {
                         Image(systemName: "chevron.down")
-                            .foregroundColor(.blue)
-                            .frame(width: circleFrameSize, height: circleFrameSize, alignment: .center)
-                            .background(Circle().fill(.blue).opacity(opacityValue))
+                            .kbCapsuleBackground(color: .blue)
                     }
                     .disabled(focusedField == .toValue || focusedField == nil)
                     
@@ -167,13 +170,11 @@ struct DifferenceView: View {
                         focusedField = nil
                     }) {
                         Text("Done")
-                            .foregroundColor(.green)
-                            .padding(.horizontal, hPadding)
-                            .padding(.vertical, vPadding)
-                            .background(Capsule().fill(.green).opacity(opacityValue))
+                            .kbCapsuleBackground(color: .green)
                     }
                 }
             }
+            .tint(tab.color())
         }
     }
     // MARK: - Helper Methods
@@ -220,5 +221,5 @@ struct DifferenceView: View {
 }
 
 #Preview {
-    DifferenceView()
+    DifferenceView(tab: .difference)
 }
