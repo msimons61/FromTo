@@ -8,31 +8,49 @@
 import SwiftUI
 import Combine
 
+@MainActor
 class SettingsData: ObservableObject {
+    // MARK: - Cloud Storage
+    private let cloudStore = CloudKeyValueStore.shared
+    private var cancellables = Set<AnyCancellable>()
+
+    // MARK: - Keys
+    private enum Keys {
+        static let displayMode = "com.fromto.settings.displayMode"
+        static let isDoubleCurrencyEnabled = "com.fromto.settings.isDoubleCurrencyEnabled"
+        static let isApplyCostEnabled = "com.fromto.settings.isApplyCostEnabled"
+        static let fromCurrency = "com.fromto.settings.fromCurrency"
+        static let toCurrency = "com.fromto.settings.toCurrency"
+        static let currencyRate = "com.fromto.settings.currencyRate"
+        static let defaultFixedCost = "com.fromto.settings.defaultFixedCost"
+        static let defaultVariableCost = "com.fromto.settings.defaultVariableCost"
+        static let defaultMaximumCost = "com.fromto.settings.defaultMaximumCost"
+    }
+
     // MARK: - Published Properties
     @Published var displayMode: DisplayMode {
         didSet {
-            UserDefaults.standard.set(displayMode.rawValue, forKey: "com.fromto.settings.displayMode")
+            cloudStore.setString(displayMode.rawValue, forKey: Keys.displayMode)
         }
     }
 
     @Published var isDoubleCurrencyEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(isDoubleCurrencyEnabled, forKey: "com.fromto.settings.isDoubleCurrencyEnabled")
+            cloudStore.setBool(isDoubleCurrencyEnabled, forKey: Keys.isDoubleCurrencyEnabled)
             syncCurrenciesIfNeeded()
         }
     }
 
     @Published var isApplyCostEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(isApplyCostEnabled, forKey: "com.fromto.settings.isApplyCostEnabled")
+            cloudStore.setBool(isApplyCostEnabled, forKey: Keys.isApplyCostEnabled)
             resetCostsIfNeeded()
         }
     }
 
     @Published var fromCurrency: String {
         didSet {
-            UserDefaults.standard.set(fromCurrency, forKey: "com.fromto.settings.fromCurrency")
+            cloudStore.setString(fromCurrency, forKey: Keys.fromCurrency)
             updateCurrencyRateIfNeeded()
             syncCurrenciesIfNeeded()
         }
@@ -40,35 +58,35 @@ class SettingsData: ObservableObject {
 
     @Published var toCurrency: String {
         didSet {
-            UserDefaults.standard.set(toCurrency, forKey: "com.fromto.settings.toCurrency")
+            cloudStore.setString(toCurrency, forKey: Keys.toCurrency)
             updateCurrencyRateIfNeeded()
         }
     }
 
     @Published var currencyRate: Decimal {
         didSet {
-            UserDefaults.standard.set("\(currencyRate)", forKey: "com.fromto.settings.currencyRate")
+            cloudStore.setDecimal(currencyRate, forKey: Keys.currencyRate)
         }
     }
 
     @Published var defaultFixedCost: Decimal {
         didSet {
-            UserDefaults.standard.set("\(defaultFixedCost)", forKey: "com.fromto.settings.defaultFixedCost")
+            cloudStore.setDecimal(defaultFixedCost, forKey: Keys.defaultFixedCost)
         }
     }
 
     @Published var defaultVariableCost: Decimal {
         didSet {
-            UserDefaults.standard.set("\(defaultVariableCost)", forKey: "com.fromto.settings.defaultVariableCost")
+            cloudStore.setDecimal(defaultVariableCost, forKey: Keys.defaultVariableCost)
         }
     }
 
     @Published var defaultMaximumCost: Decimal? {
         didSet {
             if let value = defaultMaximumCost {
-                UserDefaults.standard.set("\(value)", forKey: "com.fromto.settings.defaultMaximumCost")
+                cloudStore.setDecimal(value, forKey: Keys.defaultMaximumCost)
             } else {
-                UserDefaults.standard.removeObject(forKey: "com.fromto.settings.defaultMaximumCost")
+                cloudStore.remove(forKey: Keys.defaultMaximumCost)
             }
         }
     }
@@ -92,56 +110,107 @@ class SettingsData: ObservableObject {
 
     // MARK: - Initialization
     init() {
-        // Load from UserDefaults
-        if let savedMode = UserDefaults.standard.string(forKey: "com.fromto.settings.displayMode"),
+        // Load from cloud storage (with UserDefaults fallback)
+        if let savedMode = cloudStore.getString(forKey: Keys.displayMode),
            let mode = DisplayMode(rawValue: savedMode) {
             self.displayMode = mode
         } else {
             self.displayMode = .system
         }
 
-        // Use object(forKey:) to distinguish "not set" from "false" for default=true
-        if let saved = UserDefaults.standard.object(forKey: "com.fromto.settings.isDoubleCurrencyEnabled") as? Bool {
-            self.isDoubleCurrencyEnabled = saved
-        } else {
-            self.isDoubleCurrencyEnabled = true
+        // Use getBool which handles nil properly
+        self.isDoubleCurrencyEnabled = cloudStore.getBool(forKey: Keys.isDoubleCurrencyEnabled) ?? true
+        self.isApplyCostEnabled = cloudStore.getBool(forKey: Keys.isApplyCostEnabled) ?? true
+
+        self.fromCurrency = cloudStore.getString(forKey: Keys.fromCurrency) ?? "USD"
+        self.toCurrency = cloudStore.getString(forKey: Keys.toCurrency) ?? "EUR"
+
+        self.currencyRate = cloudStore.getDecimal(forKey: Keys.currencyRate) ?? 1.0
+        self.defaultFixedCost = cloudStore.getDecimal(forKey: Keys.defaultFixedCost) ?? 0
+        self.defaultVariableCost = cloudStore.getDecimal(forKey: Keys.defaultVariableCost) ?? 0
+        self.defaultMaximumCost = cloudStore.getDecimal(forKey: Keys.defaultMaximumCost)
+
+        setupCloudObserver()
+    }
+
+    // MARK: - Cloud Sync
+    private func setupCloudObserver() {
+        NotificationCenter.default.publisher(
+            for: .cloudKeyValueStoreDidUpdate
+        )
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] _ in
+            self?.reloadFromCloud()
+        }
+        .store(in: &cancellables)
+    }
+
+    private func reloadFromCloud() {
+        // Reload all properties from cloud storage (without UserDefaults fallback)
+        // This prevents overwriting cloud data with stale local data
+
+        if let savedMode = cloudStore.getString(forKey: Keys.displayMode, fallbackToUserDefaults: false),
+           let mode = DisplayMode(rawValue: savedMode) {
+            displayMode = mode
         }
 
-        if let saved = UserDefaults.standard.object(forKey: "com.fromto.settings.isApplyCostEnabled") as? Bool {
-            self.isApplyCostEnabled = saved
-        } else {
-            self.isApplyCostEnabled = true
+        if let value = cloudStore.getBool(forKey: Keys.isDoubleCurrencyEnabled, fallbackToUserDefaults: false) {
+            isDoubleCurrencyEnabled = value
         }
 
-        self.fromCurrency = UserDefaults.standard.string(forKey: "com.fromto.settings.fromCurrency") ?? "USD"
-        self.toCurrency = UserDefaults.standard.string(forKey: "com.fromto.settings.toCurrency") ?? "EUR"
-
-        if let rateString = UserDefaults.standard.string(forKey: "com.fromto.settings.currencyRate"),
-           let rate = Decimal(string: rateString) {
-            self.currencyRate = rate
-        } else {
-            self.currencyRate = 1.0
+        if let value = cloudStore.getBool(forKey: Keys.isApplyCostEnabled, fallbackToUserDefaults: false) {
+            isApplyCostEnabled = value
         }
 
-        if let fixedString = UserDefaults.standard.string(forKey: "com.fromto.settings.defaultFixedCost"),
-           let fixed = Decimal(string: fixedString) {
-            self.defaultFixedCost = fixed
-        } else {
-            self.defaultFixedCost = 0
+        if let value = cloudStore.getString(forKey: Keys.fromCurrency, fallbackToUserDefaults: false) {
+            fromCurrency = value
         }
 
-        if let variableString = UserDefaults.standard.string(forKey: "com.fromto.settings.defaultVariableCost"),
-           let variable = Decimal(string: variableString) {
-            self.defaultVariableCost = variable
-        } else {
-            self.defaultVariableCost = 0
+        if let value = cloudStore.getString(forKey: Keys.toCurrency, fallbackToUserDefaults: false) {
+            toCurrency = value
         }
 
-        if let maxString = UserDefaults.standard.string(forKey: "com.fromto.settings.defaultMaximumCost"),
-           let max = Decimal(string: maxString) {
-            self.defaultMaximumCost = max
+        if let value = cloudStore.getDecimal(forKey: Keys.currencyRate, fallbackToUserDefaults: false) {
+            currencyRate = value
+        }
+
+        if let value = cloudStore.getDecimal(forKey: Keys.defaultFixedCost, fallbackToUserDefaults: false) {
+            defaultFixedCost = value
+        }
+
+        if let value = cloudStore.getDecimal(forKey: Keys.defaultVariableCost, fallbackToUserDefaults: false) {
+            defaultVariableCost = value
+        }
+
+        // For optional values, check explicitly
+        defaultMaximumCost = cloudStore.getDecimal(forKey: Keys.defaultMaximumCost, fallbackToUserDefaults: false)
+    }
+
+    func performCloudMigration() async {
+        // Migrate all keys from UserDefaults to iCloud KVS
+        let keys = [
+            Keys.displayMode,
+            Keys.isDoubleCurrencyEnabled,
+            Keys.isApplyCostEnabled,
+            Keys.fromCurrency,
+            Keys.toCurrency,
+            Keys.currencyRate,
+            Keys.defaultFixedCost,
+            Keys.defaultVariableCost,
+            Keys.defaultMaximumCost
+        ]
+
+        var migratedCount = 0
+        for key in keys {
+            if cloudStore.migrateFromUserDefaults(key: key) {
+                migratedCount += 1
+            }
+        }
+
+        if migratedCount > 0 {
+            print("Migrated \(migratedCount) settings keys to iCloud KVS")
         } else {
-            self.defaultMaximumCost = nil
+            print("No settings migration needed")
         }
     }
 

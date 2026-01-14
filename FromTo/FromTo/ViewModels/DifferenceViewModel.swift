@@ -8,13 +8,37 @@
 import Foundation
 import Combine
 
+@MainActor
 class DifferenceViewModel: ObservableObject {
-    // MARK: - Published Properties
-    @Published var fromValue: Decimal = 0
-    @Published var toValue: Decimal = 0
-    @Published var isRelativeMode: Bool = false
-
+    // MARK: - Cloud Storage
+    private let cloudStore = CloudKeyValueStore.shared
     private var cancellables = Set<AnyCancellable>()
+
+    // MARK: - Keys
+    private enum Keys {
+        static let fromValue = "com.fromto.difference.fromValue"
+        static let toValue = "com.fromto.difference.toValue"
+        static let isRelativeMode = "com.fromto.difference.isRelativeMode"
+    }
+
+    // MARK: - Published Properties
+    @Published var fromValue: Decimal {
+        didSet {
+            cloudStore.setDecimal(fromValue, forKey: Keys.fromValue)
+        }
+    }
+
+    @Published var toValue: Decimal {
+        didSet {
+            cloudStore.setDecimal(toValue, forKey: Keys.toValue)
+        }
+    }
+
+    @Published var isRelativeMode: Bool {
+        didSet {
+            cloudStore.setBool(isRelativeMode, forKey: Keys.isRelativeMode)
+        }
+    }
 
     // MARK: - Computed Properties for Absolute Mode
     var absoluteDifferenceAbsolute: Decimal {
@@ -46,42 +70,58 @@ class DifferenceViewModel: ObservableObject {
 
     // MARK: - Initialization
     init() {
-        loadFromDefaults()
-        setupPersistence()
+        // Load from cloud storage (with UserDefaults fallback)
+        self.fromValue = cloudStore.getDecimal(forKey: Keys.fromValue) ?? 0
+        self.toValue = cloudStore.getDecimal(forKey: Keys.toValue) ?? 0
+        self.isRelativeMode = cloudStore.getBool(forKey: Keys.isRelativeMode) ?? false
+
+        setupCloudObserver()
     }
 
-    // MARK: - Persistence
-    private func setupPersistence() {
-        // Save to UserDefaults whenever any property changes
-        Publishers.CombineLatest3(
-            $fromValue,
-            $toValue,
-            $isRelativeMode
+    // MARK: - Cloud Sync
+    private func setupCloudObserver() {
+        NotificationCenter.default.publisher(
+            for: .cloudKeyValueStoreDidUpdate
         )
-        .debounce(for: .milliseconds(300), scheduler: RunLoop.main)
-        .sink { [weak self] _, _, _ in
-            self?.saveToDefaults()
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] _ in
+            self?.reloadFromCloud()
         }
         .store(in: &cancellables)
     }
 
-    private func saveToDefaults() {
-        UserDefaults.standard.set("\(fromValue)", forKey: "com.fromto.difference.fromValue")
-        UserDefaults.standard.set("\(toValue)", forKey: "com.fromto.difference.toValue")
-        UserDefaults.standard.set(isRelativeMode, forKey: "com.fromto.difference.isRelativeMode")
-    }
+    private func reloadFromCloud() {
+        // Reload all properties from cloud storage (without UserDefaults fallback)
+        // This prevents overwriting cloud data with stale local data
 
-    private func loadFromDefaults() {
-        if let savedFrom = UserDefaults.standard.string(forKey: "com.fromto.difference.fromValue"),
-           let value = Decimal(string: savedFrom) {
+        if let value = cloudStore.getDecimal(forKey: Keys.fromValue, fallbackToUserDefaults: false) {
             fromValue = value
         }
 
-        if let savedTo = UserDefaults.standard.string(forKey: "com.fromto.difference.toValue"),
-           let value = Decimal(string: savedTo) {
+        if let value = cloudStore.getDecimal(forKey: Keys.toValue, fallbackToUserDefaults: false) {
             toValue = value
         }
 
-        isRelativeMode = UserDefaults.standard.bool(forKey: "com.fromto.difference.isRelativeMode")
+        if let value = cloudStore.getBool(forKey: Keys.isRelativeMode, fallbackToUserDefaults: false) {
+            isRelativeMode = value
+        }
+    }
+
+    func performCloudMigration() async {
+        // Migrate all keys from UserDefaults to iCloud KVS
+        let keys = [Keys.fromValue, Keys.toValue, Keys.isRelativeMode]
+
+        var migratedCount = 0
+        for key in keys {
+            if cloudStore.migrateFromUserDefaults(key: key) {
+                migratedCount += 1
+            }
+        }
+
+        if migratedCount > 0 {
+            print("Migrated \(migratedCount) difference calculator keys to iCloud KVS")
+        } else {
+            print("No difference calculator migration needed")
+        }
     }
 }

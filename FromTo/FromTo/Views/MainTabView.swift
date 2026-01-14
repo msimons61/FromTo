@@ -31,7 +31,7 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             Tab(value: AppTab.investment) {
-                InvestmentView(settings: settings, tab: .investment)
+                InvestmentListView(tab: .investment)
             } label: {
                 Label("Investment", systemImage: "chart.line.uptrend.xyaxis")
             }
