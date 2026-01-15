@@ -364,7 +364,7 @@ struct ProjectionDetailView: View {
                         }) {
                             Image(systemName: "arrow.clockwise")
                         }
-                        .circleBackground(fgColor: tab.color(), font: .body.bold(), size: 5)
+                        .circleBackground(fgColor: tab.color(), font: .body.bold(), padding: 5)
                         .disabled(isFetchingRate)
 
                         Spacer()
@@ -452,7 +452,7 @@ struct ProjectionDetailView: View {
                         }) {
                             Image(systemName: "arrow.counterclockwise")
                         }
-                        .circleBackground(fgColor: tab.color(), font: .body.bold(), size: 5)
+                        .circleBackground(fgColor: tab.color(), font: .body.bold(), padding: 5)
                     }
                 }
             }

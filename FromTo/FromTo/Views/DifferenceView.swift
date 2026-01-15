@@ -92,7 +92,7 @@ struct DifferenceView: View {
                                 swapValues()
                             }) {
                                 Image(systemName: "arrow.trianglehead.2.counterclockwise.rotate.90")
-                                    .circleBackground(fgColor: tab.color(), font: .body.bold(), size: 5)
+                                    .circleBackground(fgColor: tab.color(), font: .body.bold(), padding: 5)
                             }
                         }
                     }

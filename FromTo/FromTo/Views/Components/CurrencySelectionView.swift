@@ -63,20 +63,23 @@ struct CurrencySelectionView: View {
                     }) {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(currency)
-                                    .foregroundColor(.primary)
-                                    .font(.body)
+                                HStack{
+                                    Text(currency)
+                                        .foregroundColor(.primary)
+                                        .font(.body)
+                                    
+                                    if currency == selectedCurrency {
+                                        Image(systemName: "checkmark")
+                                            .capsuleBackground(fgColor: tab.color(), font: .title3.bold(), hPadding: 10, vPadding: 5)
+                                    }
+                                    Spacer()
+                                }
                                 HStack {
                                     Spacer()
                                     Text(currencyName(for: currency))
                                         .foregroundColor(.secondary)
                                         .font(.subheadline)
                                 }
-                            }
-                            Spacer()
-                            if currency == selectedCurrency {
-                                Image(systemName: "checkmark")
-                                    .foregroundColor(.blue)
                             }
                         }
                     }

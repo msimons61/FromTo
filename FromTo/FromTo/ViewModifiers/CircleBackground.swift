@@ -12,13 +12,13 @@ struct CircleBackground: ViewModifier {
 
     var fgColor: Color
     var font: Font
-    var size: CGFloat
+    var padding: CGFloat
 
     func body(content: Content) -> some View {
         content
             .foregroundColor(fgColor)
             .font(font)
-            .padding(size)
+            .padding(padding)
             .background(Color(.secondarySystemFill))
             .clipShape(Circle())
     }
@@ -28,12 +28,12 @@ extension View {
     func circleBackground(
         fgColor: Color,
         font: Font = .caption,
-        size: CGFloat = 2,
+        padding: CGFloat = 2,
     ) -> some View {
         modifier(CircleBackground(
             fgColor: fgColor,
             font: font,
-            size: size,
+            padding: padding,
         ))
     }
 }

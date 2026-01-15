@@ -146,7 +146,7 @@ struct SettingsView: View {
                                 swapCurrencies()
                             }) {
                                 Image(systemName: "arrow.trianglehead.2.counterclockwise.rotate.90")
-                                    .circleBackground(fgColor: tab.color(), font: .body.bold(), size: 5)
+                                    .circleBackground(fgColor: tab.color(), font: .body.bold(), padding: 5)
                             }
                         }
                     }
