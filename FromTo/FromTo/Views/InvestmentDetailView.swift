@@ -20,6 +20,20 @@ struct InvestmentDetailView: View {
         settingsQuery.first
     }
 
+    // MARK: - Filtered Currency Lists
+    /// Available base currencies (excludes transaction currency when double currency is enabled)
+    private var availableBaseCurrencies: [String] {
+        let currencies = settings?.availableCurrencies ?? []
+        guard settings?.doubleCurrency == true else { return currencies }
+        return currencies.filter { $0 != transactionCurrency }
+    }
+
+    /// Available transaction currencies (always excludes base currency)
+    private var availableTransactionCurrencies: [String] {
+        let currencies = settings?.availableCurrencies ?? []
+        return currencies.filter { $0 != baseCurrency }
+    }
+
     // Draft copies for editing
     @State private var name: String
     @State private var ticker: String
@@ -199,31 +213,45 @@ struct InvestmentDetailView: View {
 
             // MARK: - Currency Section
             Section {
-                HStack {
-                    Text(settings?.doubleCurrency == true ? "Base Currency" : "Currency")
-                    Spacer()
-                    TextField("USD", text: $baseCurrency)
-                        .multilineTextAlignment(.trailing)
-                        .textInputAutocapitalization(.characters)
-                        .focused($focusedField, equals: .baseCurrency)
-                        .onChange(of: baseCurrency) { _, _ in
-                            hasChanges = true
-                            fetchCurrencyRate()
-                        }
+                NavigationLink(
+                    destination: CurrencySelectionView(
+                        selectedCurrency: $baseCurrency,
+                        availableCurrencies: availableBaseCurrencies,
+                        title: settings?.doubleCurrency == true ? "Base Currency" : "Currency",
+                        tab: tab
+                    )
+                ) {
+                    HStack {
+                        Text(settings?.doubleCurrency == true ? "Base Currency" : "Currency")
+                        Spacer()
+                        Text(baseCurrency)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .onChange(of: baseCurrency) { _, _ in
+                    hasChanges = true
+                    fetchCurrencyRate()
                 }
 
                 if settings?.doubleCurrency == true {
-                    HStack {
-                        Text("Transaction Currency")
-                        Spacer()
-                        TextField("EUR", text: $transactionCurrency)
-                            .multilineTextAlignment(.trailing)
-                            .textInputAutocapitalization(.characters)
-                            .focused($focusedField, equals: .transactionCurrency)
-                            .onChange(of: transactionCurrency) { _, _ in
-                                hasChanges = true
-                                fetchCurrencyRate()
-                            }
+                    NavigationLink(
+                        destination: CurrencySelectionView(
+                            selectedCurrency: $transactionCurrency,
+                            availableCurrencies: availableTransactionCurrencies,
+                            title: "Transaction Currency",
+                            tab: tab
+                        )
+                    ) {
+                        HStack {
+                            Text("Transaction Currency")
+                            Spacer()
+                            Text(transactionCurrency)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .onChange(of: transactionCurrency) { _, _ in
+                        hasChanges = true
+                        fetchCurrencyRate()
                     }
 
                     HStack {
@@ -432,7 +460,7 @@ struct InvestmentDetailView: View {
     }
 
     enum Field: Hashable {
-        case name, ticker, numberOfStocks, stockPrice, baseCurrency, transactionCurrency, currencyRate, fixedCost, variableCost, maximumCost, bankBrokerName
+        case name, ticker, numberOfStocks, stockPrice, currencyRate, fixedCost, variableCost, maximumCost, bankBrokerName
     }
 
     // MARK: - Helper Methods
@@ -528,10 +556,6 @@ struct InvestmentDetailView: View {
             numberOfStocks = "0"
         case .stockPrice:
             stockPrice = 0
-        case .baseCurrency:
-            baseCurrency = ""
-        case .transactionCurrency:
-            transactionCurrency = ""
         case .currencyRate:
             currencyRate = 1.0
         case .fixedCost:
@@ -558,17 +582,13 @@ struct InvestmentDetailView: View {
             focusedField = .ticker
         case .stockPrice:
             focusedField = .numberOfStocks
-        case .baseCurrency:
-            focusedField = .stockPrice
-        case .transactionCurrency:
-            focusedField = .baseCurrency
         case .currencyRate:
-            focusedField = .transactionCurrency
+            focusedField = .stockPrice
         case .bankBrokerName:
             if settings?.doubleCurrency == true {
                 focusedField = .currencyRate
             } else {
-                focusedField = .baseCurrency
+                focusedField = .stockPrice
             }
         case .fixedCost:
             focusedField = .bankBrokerName
@@ -590,15 +610,11 @@ struct InvestmentDetailView: View {
         case .numberOfStocks:
             focusedField = .stockPrice
         case .stockPrice:
-            focusedField = .baseCurrency
-        case .baseCurrency:
             if settings?.doubleCurrency == true {
-                focusedField = .transactionCurrency
+                focusedField = .currencyRate
             } else {
                 focusedField = .bankBrokerName
             }
-        case .transactionCurrency:
-            focusedField = .currencyRate
         case .currencyRate:
             focusedField = .bankBrokerName
         case .bankBrokerName:

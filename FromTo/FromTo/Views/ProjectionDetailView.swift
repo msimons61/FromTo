@@ -51,6 +51,20 @@ struct ProjectionDetailView: View {
         return Array(Set(names)).sorted()
     }
 
+    // MARK: - Filtered Currency Lists
+    /// Available base currencies (excludes transaction currency when double currency is enabled)
+    private var availableBaseCurrencies: [String] {
+        let currencies = settings?.availableCurrencies ?? []
+        guard settings?.doubleCurrency ?? true else { return currencies }
+        return currencies.filter { $0 != transactionCurrency }
+    }
+
+    /// Available transaction currencies (always excludes base currency)
+    private var availableTransactionCurrencies: [String] {
+        let currencies = settings?.availableCurrencies ?? []
+        return currencies.filter { $0 != baseCurrency }
+    }
+
     init(projection: Projection, tab: AppTab) {
         self.projection = projection
         self.tab = tab
@@ -301,9 +315,19 @@ struct ProjectionDetailView: View {
 
             // MARK: - Currency Section
             Section {
-                Picker("Base Currency", selection: $baseCurrency) {
-                    ForEach(settings?.availableCurrencies ?? [], id: \.self) { currency in
-                        Text(currency).tag(currency)
+                NavigationLink(
+                    destination: CurrencySelectionView(
+                        selectedCurrency: $baseCurrency,
+                        availableCurrencies: availableBaseCurrencies,
+                        title: settings?.doubleCurrency ?? true ? "Base Currency" : "Currency",
+                        tab: tab
+                    )
+                ) {
+                    HStack {
+                        Text(settings?.doubleCurrency ?? true ? "Base Currency" : "Currency")
+                        Spacer()
+                        Text(baseCurrency)
+                            .foregroundColor(.secondary)
                     }
                 }
                 .onChange(of: baseCurrency) { _, _ in
@@ -312,9 +336,19 @@ struct ProjectionDetailView: View {
                 }
 
                 if settings?.doubleCurrency ?? true {
-                    Picker("Transaction Currency", selection: $transactionCurrency) {
-                        ForEach(settings?.availableCurrencies ?? [], id: \.self) { currency in
-                            Text(currency).tag(currency)
+                    NavigationLink(
+                        destination: CurrencySelectionView(
+                            selectedCurrency: $transactionCurrency,
+                            availableCurrencies: availableTransactionCurrencies,
+                            title: "Transaction Currency",
+                            tab: tab
+                        )
+                    ) {
+                        HStack {
+                            Text("Transaction Currency")
+                            Spacer()
+                            Text(transactionCurrency)
+                                .foregroundColor(.secondary)
                         }
                     }
                     .onChange(of: transactionCurrency) { _, _ in
@@ -324,7 +358,17 @@ struct ProjectionDetailView: View {
 
                     HStack {
                         Text("Currency Rate")
+                        
+                        Button(action: {
+                            fetchCurrencyRate()
+                        }) {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .circleBackground(fgColor: tab.color(), font: .body.bold(), size: 5)
+                        .disabled(isFetchingRate)
+
                         Spacer()
+
                         if isFetchingRate {
                             ProgressView()
                                 .scaleEffect(0.8)
@@ -339,14 +383,6 @@ struct ProjectionDetailView: View {
                         .multilineTextAlignment(.trailing)
                         .focused($focusedField, equals: .currencyRate)
                         .onChange(of: currencyRate) { _, _ in hasChanges = true }
-
-                        Button(action: {
-                            fetchCurrencyRate()
-                        }) {
-                            Image(systemName: "arrow.clockwise")
-                        }
-                        .circleBackground(fgColor: tab.color(), font: .body.bold(), size: 5)
-                        .disabled(isFetchingRate)
                     }
                 }
             } header: {
