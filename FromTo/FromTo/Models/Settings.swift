@@ -132,9 +132,9 @@ extension Settings {
 
 // MARK: - Helper Methods
 extension Settings {
-    /// Available currencies list
+    /// Available currencies list (limited to Frankfurter API supported currencies)
     var availableCurrencies: [String] {
-        return Locale.commonISOCurrencyCodes.sorted()
+        return CurrencyRateService.supportedCurrencies
     }
 
     /// Creates default settings instance

@@ -27,6 +27,7 @@ struct SettingsView: View {
     @State private var defaultMaximumCost: Decimal? = nil
     @State private var showingInvalidProviderAlert = false
     @State private var showingNoBrokerWithCostAlert = false
+    @State private var showingSameCurrencyAlert = false
 
     private var settings: Settings? {
         settingsQuery.first
@@ -36,6 +37,20 @@ struct SettingsView: View {
     private var uniqueProviderNames: [String] {
         let names = allProviders.map { $0.bankBrokerName }
         return Array(Set(names)).sorted()
+    }
+
+    // MARK: - Filtered Currency Lists
+    /// Available base currencies (excludes transaction currency when double currency is enabled)
+    private var availableBaseCurrencies: [String] {
+        let currencies = settings?.availableCurrencies ?? []
+        guard doubleCurrency else { return currencies }
+        return currencies.filter { $0 != transactionCurrency }
+    }
+
+    /// Available transaction currencies (always excludes base currency)
+    private var availableTransactionCurrencies: [String] {
+        let currencies = settings?.availableCurrencies ?? []
+        return currencies.filter { $0 != baseCurrency }
     }
 
     // MARK: - App Information
@@ -70,7 +85,17 @@ struct SettingsView: View {
                     Toggle("Double Currency", isOn: $doubleCurrency)
                         .onChange(of: doubleCurrency) { _, newValue in
                             if !newValue {
+                                // When disabling, sync to same currency
                                 transactionCurrency = baseCurrency
+                            } else {
+                                // When enabling, ensure currencies are different
+                                if baseCurrency == transactionCurrency {
+                                    // Auto-change to first available different currency
+                                    if let firstDifferent = availableTransactionCurrencies.first {
+                                        transactionCurrency = firstDifferent
+                                        showingSameCurrencyAlert = true
+                                    }
+                                }
                             }
                             saveSettings()
                         }
@@ -78,7 +103,7 @@ struct SettingsView: View {
                     NavigationLink(
                         destination: CurrencySelectionView(
                             selectedCurrency: $baseCurrency,
-                            availableCurrencies: settings?.availableCurrencies ?? [],
+                            availableCurrencies: availableBaseCurrencies,
                             title: doubleCurrency ? "Base Currency" : "Currency",
                             tab: tab
                         )
@@ -96,7 +121,7 @@ struct SettingsView: View {
                         NavigationLink(
                             destination: CurrencySelectionView(
                                 selectedCurrency: $transactionCurrency,
-                                availableCurrencies: settings?.availableCurrencies ?? [],
+                                availableCurrencies: availableTransactionCurrencies,
                                 title: "Transaction Currency",
                                 tab: tab
                             )
@@ -315,6 +340,11 @@ struct SettingsView: View {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text("Apply Cost is enabled but no Default Bank/Broker is selected. This is a logical inconsistency. Please select a Bank/Broker to use cost features, or disable Apply Cost.")
+            }
+            .alert("Same Currency Not Allowed", isPresented: $showingSameCurrencyAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("The Frankfurter API does not support the same currency for both Base Currency and Transaction Currency. The Transaction Currency has been automatically changed to \(transactionCurrency).")
             }
         }
     }

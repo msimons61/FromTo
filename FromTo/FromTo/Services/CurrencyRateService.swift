@@ -11,6 +11,14 @@ import Foundation
 class CurrencyRateService {
     static let shared = CurrencyRateService()
 
+    /// Currencies supported by the Frankfurter API (31 currencies)
+    static let supportedCurrencies: [String] = [
+        "AUD", "BGN", "BRL", "CAD", "CHF", "CNY", "CZK", "DKK",
+        "EUR", "GBP", "HKD", "HRK", "HUF", "IDR", "ILS", "INR",
+        "ISK", "JPY", "KRW", "MXN", "MYR", "NOK", "NZD", "PHP",
+        "PLN", "RON", "RUB", "SEK", "SGD", "THB", "TRY", "USD", "ZAR"
+    ].sorted()
+
     private init() {}
 
     /// Fetches the exchange rate from base currency to target currency for a specific date
