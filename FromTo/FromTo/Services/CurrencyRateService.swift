@@ -65,6 +65,31 @@ class CurrencyRateService {
 
         return Decimal(rate)
     }
+
+    /// Fetches the list of supported currencies from Frankfurter API
+    /// - Returns: Array of currency codes (e.g., ["USD", "EUR", "GBP"])
+    func fetchSupportedCurrencies() async throws -> [String] {
+        let urlString = "https://api.frankfurter.dev/v1/currencies"
+        guard let url = URL(string: urlString) else {
+            throw CurrencyRateError.invalidURL
+        }
+
+        // Fetch data
+        let (data, response) = try await URLSession.shared.data(from: url)
+
+        // Check response
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200 else {
+            throw CurrencyRateError.invalidResponse
+        }
+
+        // Parse JSON - returns dictionary like {"USD": "United States Dollar", "EUR": "Euro"}
+        let decoder = JSONDecoder()
+        let currencyDict = try decoder.decode([String: String].self, from: data)
+
+        // Extract and sort currency codes
+        return Array(currencyDict.keys).sorted()
+    }
 }
 
 // MARK: - Response Model

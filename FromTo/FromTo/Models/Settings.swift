@@ -32,6 +32,10 @@ final class Settings {
     private var defaultVariableCostString: String = "0"
     private var defaultMaximumCostString: String? = nil
 
+    // Currency List Cache (synced via iCloud)
+    private var cachedSupportedCurrenciesString: String? = nil
+    var lastCurrencyFetchDate: Date? = nil
+
     init(
         displayMode: DisplayMode = .system,
         doubleCurrency: Bool = true,
@@ -130,11 +134,37 @@ extension Settings {
     }
 }
 
+// MARK: - Cached Currency List
+extension Settings {
+    /// Cached supported currencies from Frankfurter API
+    var cachedSupportedCurrencies: [String]? {
+        get {
+            guard let string = cachedSupportedCurrenciesString else { return nil }
+            return string.components(separatedBy: ",").filter { !$0.isEmpty }
+        }
+        set {
+            if let currencies = newValue {
+                cachedSupportedCurrenciesString = currencies.joined(separator: ",")
+            } else {
+                cachedSupportedCurrenciesString = nil
+            }
+            modifiedAt = Date()
+        }
+    }
+
+    /// Check if currency cache needs refresh (older than 24 hours)
+    var needsCurrencyRefresh: Bool {
+        guard let lastFetch = lastCurrencyFetchDate else { return true }
+        let dayInSeconds: TimeInterval = 24 * 60 * 60
+        return Date().timeIntervalSince(lastFetch) > dayInSeconds
+    }
+}
+
 // MARK: - Helper Methods
 extension Settings {
-    /// Available currencies list (limited to Frankfurter API supported currencies)
+    /// Available currencies list (uses cached list if available, falls back to static list)
     var availableCurrencies: [String] {
-        return CurrencyRateService.supportedCurrencies
+        return cachedSupportedCurrencies ?? CurrencyRateService.supportedCurrencies
     }
 
     /// Creates default settings instance
