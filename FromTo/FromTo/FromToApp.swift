@@ -10,13 +10,12 @@ import SwiftData
 
 @main
 struct FromToApp: App {
-    @StateObject private var settings = SettingsData()
+    @StateObject private var settings = SettingsData() // Keep for migration purposes
 
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .environmentObject(settings)
-                .preferredColorScheme(settings.colorScheme)
+                .preferredColorScheme(getColorScheme())
                 .task {
                     await performMigrations()
                 }
@@ -24,7 +23,28 @@ struct FromToApp: App {
         .modelContainer(SwiftDataService.shared.modelContainer)
     }
 
+    @MainActor
+    private func getColorScheme() -> ColorScheme? {
+        let context = SwiftDataService.shared.modelContainer.mainContext
+        let descriptor = FetchDescriptor<Settings>()
+        guard let settings = try? context.fetch(descriptor).first else { return nil }
+        return settings.colorScheme
+    }
+
     private func performMigrations() async {
+        // V2 Migration: New data model
+        let migrationService = await DataMigrationService.shared
+        if await migrationService.needsMigration() {
+            do {
+                try await migrationService.performMigration(
+                    modelContainer: SwiftDataService.shared.modelContainer
+                )
+            } catch {
+                print("Failed to perform V2 migration: \(error)")
+            }
+        }
+
+        // V1 Migration: Cloud migration (legacy)
         let hasMigrated = UserDefaults.standard.bool(forKey: "com.fromto.hasMigratedToCloud")
 
         guard !hasMigrated else {
@@ -32,14 +52,7 @@ struct FromToApp: App {
             return
         }
 
-        // Migrate Investment data to SwiftData
-        do {
-            try await SwiftDataService.shared.migrateFromUserDefaults()
-        } catch {
-            print("Failed to migrate investment data: \(error)")
-        }
-
-        // Migrate Settings to iCloud KVS
+        // Migrate Settings to iCloud KVS (will be migrated to SwiftData by V2 migration)
         await settings.performCloudMigration()
 
         // Migrate Difference calculator to iCloud KVS

@@ -26,7 +26,7 @@ struct DecimalTextField: View {
         fractionDigits: Int = 2,
         includeGrouping: Bool = true,
         suffix: String? = nil,
-        tab: AppTab = .investment
+        tab: AppTab
     ) {
         self.label = label
         self._value = value

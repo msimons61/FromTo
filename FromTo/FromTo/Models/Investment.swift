@@ -14,50 +14,59 @@ final class Investment {
     var createdAt: Date = Date()
     var modifiedAt: Date = Date()
     var transactionDate: Date = Date()
+    var numberOfStocks: Int = 0
     var name: String?
+    var ticker: String = ""
+    var baseCurrency: String = "USD"
+    var transactionCurrency: String = "EUR"
+    var bankBrokerName: String = ""
+    var providerName: String? = nil
 
     // Stored properties as String (perfect Decimal precision)
-    private var availableAmountString: String = "0"
     private var stockPriceString: String = "0"
     private var currencyRateString: String = "1.0"
     private var fixedCostString: String = "0"
     private var variableCostString: String = "0"
-    private var maximumCostString: String?
+    private var maximumCostString: String = "0"
 
     init(
-        availableAmount: Decimal = 0,
+        numberOfStocks: Int = 0,
         stockPrice: Decimal = 0,
+        ticker: String = "",
         currencyRate: Decimal = 1.0,
         fixedCost: Decimal = 0,
         variableCost: Decimal = 0,
-        maximumCost: Decimal? = nil,
+        maximumCost: Decimal = 0,
         name: String? = nil,
+        baseCurrency: String = "USD",
+        transactionCurrency: String = "EUR",
+        bankBrokerName: String = "",
+        providerName: String? = nil,
         transactionDate: Date = Date()
     ) {
         self.id = UUID()
         self.createdAt = Date()
         self.modifiedAt = Date()
         self.transactionDate = transactionDate
+        self.numberOfStocks = numberOfStocks
         self.name = name
+        self.ticker = ticker
+        self.baseCurrency = baseCurrency
+        self.transactionCurrency = transactionCurrency
+        self.bankBrokerName = bankBrokerName
+        self.providerName = providerName
 
         // Store Decimals as Strings for perfect precision
-        self.availableAmountString = "\(availableAmount)"
         self.stockPriceString = "\(stockPrice)"
         self.currencyRateString = "\(currencyRate)"
         self.fixedCostString = "\(fixedCost)"
         self.variableCostString = "\(variableCost)"
-        self.maximumCostString = maximumCost.map { "\($0)" }
+        self.maximumCostString = "\(maximumCost)"
     }
 }
 
 // MARK: - Decimal Properties (Translation Layer)
 extension Investment {
-    /// Available amount as Decimal with perfect precision
-    var availableAmount: Decimal {
-        get { Decimal(string: availableAmountString) ?? 0 }
-        set { availableAmountString = "\(newValue)" }
-    }
-
     /// Stock price as Decimal with perfect precision
     var stockPrice: Decimal {
         get { Decimal(string: stockPriceString) ?? 0 }
@@ -83,57 +92,69 @@ extension Investment {
     }
 
     /// Maximum cost as Decimal with perfect precision
-    var maximumCost: Decimal? {
-        get {
-            guard let string = maximumCostString else { return nil }
-            return Decimal(string: string)
-        }
+    var maximumCost: Decimal {
+        get { Decimal(string: maximumCostString) ?? 0 }
         set {
-            maximumCostString = newValue.map { "\($0)" }
+            maximumCostString = "\(newValue)"
+            modifiedAt = Date()
         }
     }
 }
 
 // MARK: - Computed Properties
 extension Investment {
-    /// Total cost including fixed and variable costs, capped by maximum if set
-    var totalCost: Decimal {
-        let variableCostAmount = availableAmount * variableCost
-        let totalWithoutMax = fixedCost + variableCostAmount
-
-        if let maxCost = maximumCost, maxCost > 0 {
-            return min(totalWithoutMax, maxCost)
-        }
-        return totalWithoutMax
-    }
-
-    /// Amount available for investment after costs, converted to target currency
-    var investableAmount: Decimal {
-        let netAmount = availableAmount - totalCost
-        return currencyRate != 0 ? netAmount / currencyRate : 0
-    }
-
-    /// Number of whole stocks that can be purchased
-    var numberOfStocks: Int {
-        guard stockPrice > 0 else { return 0 }
-
-        let stocks = investableAmount / stockPrice
-
-        // Use Decimal's built-in rounding to floor
-        var stocksValue = stocks
-        var rounded = Decimal()
-        NSDecimalRound(&rounded, &stocksValue, 0, .down)
-
-        return Int(truncating: rounded as NSNumber)
-    }
-
     /// Total amount invested (number of stocks × stock price)
-    var investedAmount: Decimal {
+    var totalInvested: Decimal {
         return Decimal(numberOfStocks) * stockPrice
     }
 
-    /// Remaining amount after purchasing stocks
-    var remainingAmount: Decimal {
-        return investableAmount - investedAmount
+    /// Total cost including fixed and variable costs, with minimum and maximum cap
+    /// Formula: MAX(150, fixedCost + (totalInvested / currencyRate * variableCost))
+    var totalCost: Decimal {
+        // Variable cost applies to the invested amount in base currency
+        let investedAmountBase = totalInvested / currencyRate
+        let variableCostAmount = investedAmountBase * variableCost
+        let totalWithoutMax = fixedCost + variableCostAmount
+
+        // Apply minimum cost of 150
+        let costWithMinimum = max(150, totalWithoutMax)
+
+        // Apply maximum cost cap
+        if maximumCost > 0 {
+            return min(costWithMinimum, maximumCost)
+        }
+        return costWithMinimum
+    }
+
+    /// Total amount including investment and costs in transaction currency
+    var totalAmount: Decimal {
+        return totalInvested + totalCost
+    }
+
+    /// Total amount converted to base currency
+    var totalAmountInBaseCurrency: Decimal {
+        return totalAmount / currencyRate
+    }
+}
+
+// MARK: - Factory Method
+extension Investment {
+    /// Creates an Investment from a Projection
+    static func from(_ projection: Projection) -> Investment {
+        return Investment(
+            numberOfStocks: projection.actualNumberOfStocks,
+            stockPrice: projection.stockPrice,
+            ticker: projection.ticker,
+            currencyRate: projection.currencyRate,
+            fixedCost: projection.fixedCost,
+            variableCost: projection.variableCost,
+            maximumCost: projection.maximumCost ?? 0,
+            name: projection.name,
+            baseCurrency: projection.baseCurrency,
+            transactionCurrency: projection.transactionCurrency,
+            bankBrokerName: projection.bankBrokerName,
+            providerName: projection.providerName,
+            transactionDate: projection.transactionDate
+        )
     }
 }

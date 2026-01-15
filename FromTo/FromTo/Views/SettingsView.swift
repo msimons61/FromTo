@@ -2,21 +2,42 @@
 //  SettingsView.swift
 //  FromTo
 //
-//  Created by Claude Code on 12-01-2026.
+//  Updated by Claude Code on 15-01-2026.
 //
 
 import SwiftUI
+import SwiftData
 
 struct SettingsView: View {
-    @EnvironmentObject var settings: SettingsData
+    @Environment(\.modelContext) private var modelContext
+    @Query private var settingsQuery: [Settings]
+    @Query private var allProviders: [BankBrokerCost]
     @FocusState private var focusedField: Field?
     let tab: AppTab
 
-    // MARK: - let values for keyboard buttons
-//    let circleFrameSize: CGFloat = 40
-//    let opacityValue: Double = 0.2
-//    let hPadding: CGFloat = 10
-//    let vPadding: CGFloat = 8
+    // Draft state for settings
+    @State private var displayMode: DisplayMode = .system
+    @State private var doubleCurrency: Bool = true
+    @State private var baseCurrency: String = "USD"
+    @State private var transactionCurrency: String = "EUR"
+    @State private var currencyRate: Decimal = 1.0
+    @State private var applyCost: Bool = true
+    @State private var bankBrokerName: String = ""
+    @State private var defaultFixedCost: Decimal = 0
+    @State private var defaultVariableCost: Decimal = 0
+    @State private var defaultMaximumCost: Decimal? = nil
+    @State private var showingInvalidProviderAlert = false
+    @State private var showingNoBrokerWithCostAlert = false
+
+    private var settings: Settings? {
+        settingsQuery.first
+    }
+
+    // Get unique provider names
+    private var uniqueProviderNames: [String] {
+        let names = allProviders.map { $0.bankBrokerName }
+        return Array(Set(names)).sorted()
+    }
 
     // MARK: - App Information
     private var appVersion: String {
@@ -32,13 +53,14 @@ struct SettingsView: View {
             Form {
                 // MARK: - Appearance Section
                 Section {
-                    Picker("Display Mode", selection: $settings.displayMode) {
+                    Picker("Display Mode", selection: $displayMode) {
                         ForEach(DisplayMode.allCases) { mode in
                             Text(mode.rawValue).tag(mode)
                         }
                     }
                     .pickerStyle(.segmented)
                     .colorMultiply(tab.color())
+                    .onChange(of: displayMode) { _, _ in saveSettings() }
                 } header: {
                     Text("Appearance")
                         .foregroundStyle(tab.color())
@@ -46,58 +68,65 @@ struct SettingsView: View {
 
                 // MARK: - Currency Section
                 Section {
-                    Toggle("Double Currency", isOn: $settings.isDoubleCurrencyEnabled)
+                    Toggle("Double Currency", isOn: $doubleCurrency)
+                        .onChange(of: doubleCurrency) { _, newValue in
+                            if !newValue {
+                                transactionCurrency = baseCurrency
+                                currencyRate = 1.0
+                            }
+                            saveSettings()
+                        }
 
                     NavigationLink(
                         destination: CurrencySelectionView(
-                            selectedCurrency: $settings.fromCurrency,
-                            availableCurrencies: settings.availableCurrencies,
-                            title: settings.isDoubleCurrencyEnabled ? "From Currency" : "Currency",
+                            selectedCurrency: $baseCurrency,
+                            availableCurrencies: settings?.availableCurrencies ?? [],
+                            title: doubleCurrency ? "Base Currency" : "Currency",
                             tab: tab
                         )
                     ) {
                         HStack {
-                            Text(settings.isDoubleCurrencyEnabled ? "From Currency" : "Currency")
+                            Text(doubleCurrency ? "Base Currency" : "Currency")
                             Spacer()
-                            Text(settings.fromCurrency)
+                            Text(baseCurrency)
                                 .foregroundColor(.secondary)
                         }
                     }
+                    .onChange(of: baseCurrency) { _, _ in saveSettings() }
 
-                    if settings.isDoubleCurrencyEnabled {
+                    if doubleCurrency {
                         NavigationLink(
                             destination: CurrencySelectionView(
-                                selectedCurrency: $settings.toCurrency,
-                                availableCurrencies: settings.availableCurrencies,
-                                title: "To Currency",
+                                selectedCurrency: $transactionCurrency,
+                                availableCurrencies: settings?.availableCurrencies ?? [],
+                                title: "Transaction Currency",
                                 tab: tab
                             )
                         ) {
                             HStack {
-                                Text("To Currency")
+                                Text("Transaction Currency")
                                 Spacer()
-                                Text(settings.toCurrency)
+                                Text(transactionCurrency)
                                     .foregroundColor(.secondary)
                             }
                         }
+                        .onChange(of: transactionCurrency) { _, _ in saveSettings() }
                     }
 
-                    if settings.isDoubleCurrencyEnabled {
+                    if doubleCurrency {
                         HStack {
                             Text("Currency Rate")
                             Spacer()
                             DecimalTextFieldNonOptional(
                                 label: "Rate",
-                                value: Binding(
-                                    get: { settings.currencyRate },
-                                    set: { settings.currencyRate = $0 }
-                                ),
+                                value: $currencyRate,
                                 fractionDigits: 6,
                                 includeGrouping: false,
                                 tab: tab
                             )
                             .multilineTextAlignment(.trailing)
                             .focused($focusedField, equals: .currencyRate)
+                            .onChange(of: currencyRate) { _, _ in saveSettings() }
                         }
                     }
                 } header: {
@@ -105,7 +134,7 @@ struct SettingsView: View {
                         Text("Currency")
                             .foregroundStyle(tab.color())
                         Spacer()
-                        if settings.isDoubleCurrencyEnabled {
+                        if doubleCurrency {
                             Button(action: {
                                 swapCurrencies()
                             }) {
@@ -116,26 +145,86 @@ struct SettingsView: View {
                     }
                 }
 
+                // MARK: - Bank/Broker Section
+                Section {
+                    if applyCost && !uniqueProviderNames.isEmpty {
+                        NavigationLink(
+                            destination: ProviderSelectionView(
+                                selectedProvider: $bankBrokerName,
+                                availableProviders: uniqueProviderNames,
+                                tab: tab
+                            )
+                        ) {
+                            HStack {
+                                Text("Default Bank/Broker")
+                                Spacer()
+                                Text(bankBrokerName.isEmpty ? "None" : bankBrokerName)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .onChange(of: bankBrokerName) { _, newValue in
+                            // Check for logical inconsistency: Apply Cost enabled but no broker selected
+                            if applyCost && newValue.isEmpty {
+                                showingNoBrokerWithCostAlert = true
+                            } else {
+                                loadCostsFromProvider(newValue)
+                            }
+                            saveSettings()
+                        }
+                    } else {
+                        HStack {
+                            TextField("Bank/Broker Name", text: $bankBrokerName)
+                                .focused($focusedField, equals: .bankBrokerName)
+                                .onChange(of: bankBrokerName) { _, _ in saveSettings() }
+                        }
+                    }
+                } header: {
+                    Text("Default Bank/Broker")
+                        .foregroundStyle(tab.color())
+                }
+
                 // MARK: - Default Cost Section
                 Section {
-                    Toggle("Apply Cost", isOn: $settings.isApplyCostEnabled)
+                    Toggle("Apply Cost", isOn: $applyCost)
+                        .onChange(of: applyCost) { _, newValue in
+                            if !newValue {
+                                defaultFixedCost = 0
+                                defaultVariableCost = 0
+                                defaultMaximumCost = nil
+                            } else {
+                                // When turning ON, validate that bankBrokerName is in provider list
+                                if !bankBrokerName.isEmpty && !uniqueProviderNames.isEmpty {
+                                    if !uniqueProviderNames.contains(where: { $0.lowercased() == bankBrokerName.lowercased() }) {
+                                        showingInvalidProviderAlert = true
+                                    }
+                                }
+                            }
+                            saveSettings()
+                        }
 
-                    if settings.isApplyCostEnabled {
+                    if applyCost {
+                        NavigationLink(destination: BankBrokerCostListView(tab: tab)) {
+                            HStack {
+                                Text("Manage Provider Costs")
+                                Spacer()
+//                                Image(systemName: "chevron.right")
+//                                    .foregroundColor(.secondary)
+                            }
+                        }
+
                         HStack {
                             Text("Fixed Cost")
                             Spacer()
                             DecimalTextFieldNonOptional(
                                 label: "Fixed",
-                                value: Binding(
-                                    get: { settings.defaultFixedCost },
-                                    set: { settings.defaultFixedCost = $0 }
-                                ),
+                                value: $defaultFixedCost,
                                 fractionDigits: 2,
-                                suffix: settings.fromCurrency,
+                                suffix: baseCurrency,
                                 tab: tab
                             )
                             .multilineTextAlignment(.trailing)
                             .focused($focusedField, equals: .fixedCost)
+                            .onChange(of: defaultFixedCost) { _, _ in saveSettings() }
                         }
 
                         HStack {
@@ -144,13 +233,11 @@ struct SettingsView: View {
                             PercentageTextField(
                                 label: "Variable",
                                 tab: tab,
-                                value: Binding(
-                                    get: { settings.defaultVariableCost },
-                                    set: { settings.defaultVariableCost = $0 }
-                                )
+                                value: $defaultVariableCost
                             )
                             .multilineTextAlignment(.trailing)
                             .focused($focusedField, equals: .variableCost)
+                            .onChange(of: defaultVariableCost) { _, _ in saveSettings() }
                         }
 
                         HStack {
@@ -158,15 +245,14 @@ struct SettingsView: View {
                             Spacer()
                             DecimalTextField(
                                 label: "Maximum",
-                                value: Binding(
-                                    get: { settings.defaultMaximumCost },
-                                    set: { settings.defaultMaximumCost = $0 }
-                                ),
+                                value: $defaultMaximumCost,
                                 fractionDigits: 2,
-                                suffix: settings.fromCurrency
+                                suffix: baseCurrency,
+                                tab: tab
                             )
                             .multilineTextAlignment(.trailing)
                             .focused($focusedField, equals: .maximumCost)
+                            .onChange(of: defaultMaximumCost) { _, _ in saveSettings() }
                         }
                     } else {
                         Text("Cost application is disabled")
@@ -216,7 +302,6 @@ struct SettingsView: View {
                         Image(systemName: "chevron.up")
                             .kbCapsuleBackground(color: .teal)
                     }
-                    .disabled(focusedField == .currencyRate || focusedField == nil)
 
                     Button(action: {
                         moveToNextField()
@@ -224,7 +309,6 @@ struct SettingsView: View {
                         Image(systemName: "chevron.down")
                             .kbCapsuleBackground(color: .blue)
                     }
-                    .disabled(focusedField == .maximumCost || focusedField == nil)
 
                     Button(action: {
                         focusedField = nil
@@ -235,69 +319,166 @@ struct SettingsView: View {
                 }
             }
             .tint(tab.color())
+            .onAppear {
+                loadSettings()
+            }
+            .alert("Invalid Bank/Broker", isPresented: $showingInvalidProviderAlert) {
+                Button("OK", role: .cancel) {
+                    // User acknowledged, they can manually select correct one
+                }
+            } message: {
+                Text("The current Default Bank/Broker '\(bankBrokerName)' is not in your Provider Costs list. Please select a valid Bank/Broker from the list to use cost features.")
+            }
+            .alert("No Bank/Broker Selected", isPresented: $showingNoBrokerWithCostAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("Apply Cost is enabled but no Default Bank/Broker is selected. This is a logical inconsistency. Please select a Bank/Broker to use cost features, or disable Apply Cost.")
+            }
         }
     }
 
-    enum Field {
-        case currencyRate, fixedCost, variableCost, maximumCost
+    enum Field: Hashable {
+        case currencyRate, bankBrokerName, fixedCost, variableCost, maximumCost
     }
 
     // MARK: - Helper Methods
-    private func swapCurrencies() {
-        let temp = settings.fromCurrency
-        settings.fromCurrency = settings.toCurrency
-        settings.toCurrency = temp
-    }
-
-    private func clearCurrentField() {
-        guard let field = focusedField else { return }
-
-        switch field {
-        case .currencyRate:
-            settings.currencyRate = 1.0
-        case .fixedCost:
-            settings.defaultFixedCost = 0
-        case .variableCost:
-            settings.defaultVariableCost = 0
-        case .maximumCost:
-            settings.defaultMaximumCost = nil
+    private func loadSettings() {
+        if let settings = settings {
+            displayMode = settings.displayMode
+            doubleCurrency = settings.doubleCurrency
+            baseCurrency = settings.baseCurrency
+            transactionCurrency = settings.transactionCurrency
+            currencyRate = settings.currencyRate
+            applyCost = settings.applyCost
+            bankBrokerName = settings.bankBrokerName
+            defaultFixedCost = settings.defaultFixedCost
+            defaultVariableCost = settings.defaultVariableCost
+            defaultMaximumCost = settings.defaultMaximumCost
+        } else {
+            // Create default settings if none exist
+            let newSettings = Settings()
+            modelContext.insert(newSettings)
+            try? modelContext.save()
         }
     }
 
-    private func moveToPreviousField() {
-        guard let current = focusedField else { return }
+    private func saveSettings() {
+        let settings = settings ?? Settings()
+        if settingsQuery.isEmpty {
+            modelContext.insert(settings)
+        }
 
-        switch current {
+        settings.displayMode = displayMode
+        settings.doubleCurrency = doubleCurrency
+        settings.baseCurrency = baseCurrency
+        settings.transactionCurrency = transactionCurrency
+        settings.currencyRate = currencyRate
+        settings.applyCost = applyCost
+        settings.bankBrokerName = bankBrokerName
+        settings.defaultFixedCost = defaultFixedCost
+        settings.defaultVariableCost = defaultVariableCost
+        settings.defaultMaximumCost = defaultMaximumCost
+        settings.modifiedAt = Date()
+
+        try? modelContext.save()
+    }
+
+    private func swapCurrencies() {
+        let temp = baseCurrency
+        baseCurrency = transactionCurrency
+        transactionCurrency = temp
+        saveSettings()
+    }
+
+    private func loadCostsFromProvider(_ providerName: String) {
+        guard !providerName.isEmpty else { return }
+
+        // Find all providers with this name
+        let matchingProviders = allProviders.filter {
+            $0.bankBrokerName.lowercased() == providerName.lowercased()
+        }
+
+        guard !matchingProviders.isEmpty else { return }
+
+        // Get the currently active provider (no end date or end date in the future)
+        let now = Date()
+        let activeProvider = matchingProviders.first { provider in
+            if let endDate = provider.endDate {
+                return endDate >= now
+            }
+            return true // No end date means active
+        }
+
+        // If no active provider, use the most recent one (by start date)
+        let selectedProvider = activeProvider ?? matchingProviders.sorted { $0.startDate > $1.startDate }.first
+
+        // Load costs from the selected provider
+        if let provider = selectedProvider {
+            defaultFixedCost = provider.fixedCost
+            defaultVariableCost = provider.variableCostRate
+            defaultMaximumCost = provider.maximumCost > 0 ? provider.maximumCost : nil
+        }
+    }
+
+    private func clearCurrentField() {
+        switch focusedField {
         case .currencyRate:
-            focusedField = nil  // First field, no previous
+            currencyRate = 1.0
+        case .bankBrokerName:
+            bankBrokerName = ""
         case .fixedCost:
-            // Go to currencyRate if Double Currency enabled, else no previous
-            focusedField = settings.isDoubleCurrencyEnabled ? .currencyRate : nil
+            defaultFixedCost = 0
+        case .variableCost:
+            defaultVariableCost = 0
+        case .maximumCost:
+            defaultMaximumCost = nil
+        default:
+            break
+        }
+        saveSettings()
+    }
+
+    private func moveToPreviousField() {
+        switch focusedField {
+        case .bankBrokerName:
+            if doubleCurrency {
+                focusedField = .currencyRate
+            } else {
+                focusedField = nil
+            }
+        case .fixedCost:
+            focusedField = .bankBrokerName
         case .variableCost:
             focusedField = .fixedCost
         case .maximumCost:
             focusedField = .variableCost
+        default:
+            focusedField = nil
         }
     }
 
     private func moveToNextField() {
-        guard let current = focusedField else { return }
-
-        switch current {
+        switch focusedField {
         case .currencyRate:
-            // Go to fixedCost if Apply Cost enabled, else dismiss keyboard
-            focusedField = settings.isApplyCostEnabled ? .fixedCost : nil
+            focusedField = .bankBrokerName
+        case .bankBrokerName:
+            if applyCost {
+                focusedField = .fixedCost
+            } else {
+                focusedField = nil
+            }
         case .fixedCost:
             focusedField = .variableCost
         case .variableCost:
             focusedField = .maximumCost
         case .maximumCost:
-            focusedField = nil  // Last field, dismiss keyboard
+            focusedField = nil
+        default:
+            focusedField = .currencyRate
         }
     }
 }
 
 #Preview {
     SettingsView(tab: .settings)
-        .environmentObject(SettingsData())
 }

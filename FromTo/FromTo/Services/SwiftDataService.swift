@@ -17,7 +17,12 @@ class SwiftDataService {
     let modelContainer: ModelContainer
 
     private init() {
-        let schema = Schema([Investment.self])
+        let schema = Schema([
+            Investment.self,
+            Projection.self,
+            Settings.self,
+            BankBrokerCost.self
+        ])
 
         do {
             // Try to create with CloudKit first
@@ -36,7 +41,12 @@ class SwiftDataService {
             print("Falling back to local-only storage")
 
             do {
-                modelContainer = try ModelContainer(for: Investment.self)
+                modelContainer = try ModelContainer(
+                    for: Investment.self,
+                    Projection.self,
+                    Settings.self,
+                    BankBrokerCost.self
+                )
                 print("Successfully created local-only ModelContainer")
             } catch {
                 print("Local ModelContainer also failed: \(error)")
@@ -45,57 +55,21 @@ class SwiftDataService {
         }
     }
 
-    // MARK: - Migration
+    // MARK: - Helper Methods
 
-    /// Migrates existing UserDefaults investment data to SwiftData
-    /// This is a one-time migration that runs on first launch
-    func migrateFromUserDefaults() async throws {
+    /// Get or create the singleton Settings instance
+    func getOrCreateSettings() throws -> Settings {
         let context = modelContainer.mainContext
+        let descriptor = FetchDescriptor<Settings>()
 
-        // Check if migration already done by checking if any investments exist
-        let descriptor = FetchDescriptor<Investment>()
-        let existingInvestments = try context.fetch(descriptor)
-
-        guard existingInvestments.isEmpty else {
-            print("SwiftData migration already completed")
-            return
+        if let existing = try context.fetch(descriptor).first {
+            return existing
         }
 
-        // Attempt to load from UserDefaults
-        let userDefaults = UserDefaults.standard
-
-        guard let availableAmountStr = userDefaults.string(forKey: "com.fromto.investment.availableAmount"),
-              let availableAmount = Decimal(string: availableAmountStr) else {
-            print("No UserDefaults investment data to migrate")
-            return
-        }
-
-        // Load other properties
-        let stockPrice = userDefaults.string(forKey: "com.fromto.investment.stockPrice")
-            .flatMap { Decimal(string: $0) } ?? 0
-        let currencyRate = userDefaults.string(forKey: "com.fromto.investment.currencyRate")
-            .flatMap { Decimal(string: $0) } ?? 1.0
-        let fixedCost = userDefaults.string(forKey: "com.fromto.investment.fixedCost")
-            .flatMap { Decimal(string: $0) } ?? 0
-        let variableCost = userDefaults.string(forKey: "com.fromto.investment.variableCost")
-            .flatMap { Decimal(string: $0) } ?? 0
-        let maximumCost = userDefaults.string(forKey: "com.fromto.investment.maximumCost")
-            .flatMap { Decimal(string: $0) }
-
-        // Create migrated investment
-        let migratedInvestment = Investment(
-            availableAmount: availableAmount,
-            stockPrice: stockPrice,
-            currencyRate: currencyRate,
-            fixedCost: fixedCost,
-            variableCost: variableCost,
-            maximumCost: maximumCost,
-            name: "Migrated Calculation"
-        )
-
-        context.insert(migratedInvestment)
+        // Create default settings
+        let settings = Settings()
+        context.insert(settings)
         try context.save()
-
-        print("Successfully migrated investment from UserDefaults to SwiftData")
+        return settings
     }
 }

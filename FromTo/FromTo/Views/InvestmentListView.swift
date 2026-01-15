@@ -10,10 +10,17 @@ import SwiftData
 
 struct InvestmentListView: View {
     @Environment(\.modelContext) private var modelContext
-    @EnvironmentObject var settings: SettingsData
     @Query(sort: \Investment.modifiedAt, order: .reverse) private var investments: [Investment]
+    @Query private var settingsQuery: [Settings]
 
     let tab: AppTab
+
+    @State private var showingProjectionPicker = false
+    @State private var selectedInvestment: Investment?
+
+    private var settings: Settings? {
+        settingsQuery.first
+    }
 
     var body: some View {
         NavigationStack {
@@ -25,7 +32,7 @@ struct InvestmentListView: View {
                             tab: tab
                         )
                     } label: {
-                        InvestmentRowView(investment: investment, settings: settings)
+                        InvestmentRowView(investment: investment)
                     }
                 }
                 .onDelete(perform: deleteInvestments)
@@ -33,10 +40,20 @@ struct InvestmentListView: View {
             .navigationTitle("Investments")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        createNewInvestment()
+                    Menu {
+                        Button {
+                            createNewInvestment()
+                        } label: {
+                            Label("New Investment", systemImage: "plus")
+                        }
+
+                        Button {
+                            showingProjectionPicker = true
+                        } label: {
+                            Label("From Projection", systemImage: "arrow.right.circle")
+                        }
                     } label: {
-                        Label("Add Investment", systemImage: "plus")
+                        Label("Add", systemImage: "plus")
                     }
                 }
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -46,10 +63,15 @@ struct InvestmentListView: View {
             .overlay {
                 if investments.isEmpty {
                     ContentUnavailableView {
-                        Label("No Investments", systemImage: "chart.line.uptrend.xyaxis")
+                        Label("No Investments", systemImage: "chart.bar.doc.horizontal")
                     } description: {
-                        Text("Tap the + button to create your first investment calculation")
+                        Text("Tap the + button to record your first investment")
                     }
+                }
+            }
+            .sheet(isPresented: $showingProjectionPicker) {
+                ProjectionPickerSheet(tab: tab) { newInvestment in
+                    selectedInvestment = newInvestment
                 }
             }
             .tint(tab.color())
@@ -57,11 +79,20 @@ struct InvestmentListView: View {
     }
 
     private func createNewInvestment() {
+        // Get or create settings
+        let settings = settings ?? Settings()
+        if settingsQuery.isEmpty {
+            modelContext.insert(settings)
+        }
+
         let newInvestment = Investment(
-            currencyRate: settings.currencyRate,
-            fixedCost: settings.defaultFixedCost,
-            variableCost: settings.defaultVariableCost,
-            maximumCost: settings.defaultMaximumCost
+            currencyRate: settings.effectiveCurrencyRate,
+            fixedCost: settings.applyCost ? settings.defaultFixedCost : 0,
+            variableCost: settings.applyCost ? settings.defaultVariableCost : 0,
+            maximumCost: settings.applyCost ? (settings.defaultMaximumCost ?? 0) : 0,
+            baseCurrency: settings.baseCurrency,
+            transactionCurrency: settings.transactionCurrency,
+            bankBrokerName: settings.bankBrokerName
         )
         modelContext.insert(newInvestment)
 
@@ -79,13 +110,18 @@ struct InvestmentListView: View {
 
 struct InvestmentRowView: View {
     let investment: Investment
-    let settings: SettingsData
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
+                if !investment.ticker.isEmpty {
+                    Text(investment.ticker)
+                        .font(.headline)
+                        .fontWeight(.bold)
+                }
                 Text(investment.name ?? "Untitled")
-                    .font(.headline)
+                    .font(investment.ticker.isEmpty ? .headline : .subheadline)
+                    .foregroundColor(investment.ticker.isEmpty ? .primary : .secondary)
                 Spacer()
                 Text("\(investment.numberOfStocks) stocks")
                     .font(.subheadline)
@@ -93,18 +129,21 @@ struct InvestmentRowView: View {
             }
 
             HStack {
-                Text("\(investment.availableAmount.formatted(fractionDigits: 2)) \(settings.fromCurrency)")
+                Text("Invested: \(investment.totalInvested.formatted(fractionDigits: 2)) \(investment.transactionCurrency)")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 Spacer()
-                Text("\(investment.investedAmount.formatted(fractionDigits: 2)) \(settings.toCurrency)")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
             }
 
-            Text(investment.transactionDate.formatted(date: .abbreviated, time: .omitted))
-                .font(.caption)
-                .foregroundColor(.secondary)
+            HStack {
+                Text("Total: \(investment.totalAmount.formatted(fractionDigits: 2)) \(investment.transactionCurrency)")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text(investment.transactionDate.formatted(date: .abbreviated, time: .omitted))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding(.vertical, 4)
     }
@@ -112,5 +151,4 @@ struct InvestmentRowView: View {
 
 #Preview {
     InvestmentListView(tab: .investment)
-        .environmentObject(SettingsData())
 }

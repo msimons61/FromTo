@@ -9,12 +9,15 @@ import SwiftUI
 
 enum AppTab: String, Codable, CaseIterable {
     case investment = "Investment"
+    case projection = "Projection"
     case difference = "Difference"
     case settings = "Settings"
 
     func color() -> Color {
         switch self {
         case .investment:
+            return .purple
+        case .projection:
             return .blue
         case .difference:
             return .green
@@ -25,7 +28,6 @@ enum AppTab: String, Codable, CaseIterable {
 }
 
 struct MainTabView: View {
-    @EnvironmentObject var settings: SettingsData
     @AppStorage("com.fromto.selectedTab") private var selectedTab: AppTab = .investment
 
     var body: some View {
@@ -34,6 +36,12 @@ struct MainTabView: View {
                 InvestmentListView(tab: .investment)
             } label: {
                 Label("Investment", systemImage: "chart.line.uptrend.xyaxis")
+            }
+
+            Tab(value: AppTab.projection) {
+                ProjectionListView(tab: .projection)
+            } label: {
+                Label("Projection", systemImage: "chart.bar.doc.horizontal")
             }
 
             Tab(value: AppTab.difference) {
@@ -54,5 +62,4 @@ struct MainTabView: View {
 
 #Preview {
     MainTabView()
-        .environmentObject(SettingsData())
 }
