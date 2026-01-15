@@ -22,7 +22,6 @@ final class Settings {
     var doubleCurrency: Bool = true // Controls currency field visibility
     var baseCurrency: String = "USD"
     private var transactionCurrencyString: String = "EUR"
-    private var currencyRateString: String = "1.0"
 
     // Cost Settings
     var applyCost: Bool = true // Controls cost feature visibility
@@ -38,7 +37,6 @@ final class Settings {
         doubleCurrency: Bool = true,
         baseCurrency: String = "USD",
         transactionCurrency: String = "EUR",
-        currencyRate: Decimal = 1.0,
         applyCost: Bool = true,
         bankBrokerName: String = "",
         defaultFixedCost: Decimal = 0,
@@ -52,7 +50,6 @@ final class Settings {
         self.doubleCurrency = doubleCurrency
         self.baseCurrency = baseCurrency
         self.transactionCurrencyString = transactionCurrency
-        self.currencyRateString = "\(currencyRate)"
         self.applyCost = applyCost
         self.bankBrokerName = bankBrokerName
         self.defaultFixedCostString = "\(defaultFixedCost)"
@@ -94,21 +91,9 @@ extension Settings {
         }
     }
 
-    /// Currency rate as Decimal with perfect precision
-    var currencyRate: Decimal {
-        get { Decimal(string: currencyRateString) ?? 1.0 }
-        set {
-            currencyRateString = "\(newValue)"
-            modifiedAt = Date()
-        }
-    }
-
-    /// Effective currency rate - returns 1.0 if doubleCurrency is false or currencies are the same
+    /// Effective currency rate - always returns 1.0 (rates are now fetched dynamically)
     var effectiveCurrencyRate: Decimal {
-        if !doubleCurrency || baseCurrency == transactionCurrency {
-            return 1.0
-        }
-        return currencyRate
+        return 1.0
     }
 }
 
@@ -157,18 +142,10 @@ extension Settings {
         return Settings()
     }
 
-    /// Update currency rate if currencies match
-    func updateCurrencyRateIfNeeded() {
-        if baseCurrency == transactionCurrency {
-            currencyRate = 1.0
-        }
-    }
-
     /// Sync currencies when doubleCurrency is disabled
     func syncCurrenciesIfNeeded() {
         if !doubleCurrency {
             transactionCurrencyString = baseCurrency
-            currencyRate = 1.0
         }
     }
 

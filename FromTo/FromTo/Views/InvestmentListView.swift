@@ -96,6 +96,11 @@ struct InvestmentListView: View {
         )
         modelContext.insert(newInvestment)
 
+        // Create associated Balance record
+        let newBalance = Balance.from(newInvestment)
+        modelContext.insert(newBalance)
+        newInvestment.balance = newBalance
+
         // Save immediately so it appears in list
         try? modelContext.save()
     }

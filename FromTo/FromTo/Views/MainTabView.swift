@@ -10,6 +10,7 @@ import SwiftUI
 enum AppTab: String, Codable, CaseIterable {
     case investment = "Investment"
     case projection = "Projection"
+    case balance = "Balance"
     case difference = "Difference"
     case settings = "Settings"
 
@@ -19,6 +20,8 @@ enum AppTab: String, Codable, CaseIterable {
             return .purple
         case .projection:
             return .blue
+        case .balance:
+            return .teal
         case .difference:
             return .green
         case .settings:
@@ -42,6 +45,12 @@ struct MainTabView: View {
                 ProjectionListView(tab: .projection)
             } label: {
                 Label("Projection", systemImage: "chart.bar.doc.horizontal")
+            }
+
+            Tab(value: AppTab.balance) {
+                BalanceListView(tab: .balance)
+            } label: {
+                Label("Balance", systemImage: "list.bullet.clipboard")
             }
 
             Tab(value: AppTab.difference) {

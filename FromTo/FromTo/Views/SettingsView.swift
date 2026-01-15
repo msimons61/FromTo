@@ -20,7 +20,6 @@ struct SettingsView: View {
     @State private var doubleCurrency: Bool = true
     @State private var baseCurrency: String = "USD"
     @State private var transactionCurrency: String = "EUR"
-    @State private var currencyRate: Decimal = 1.0
     @State private var applyCost: Bool = true
     @State private var bankBrokerName: String = ""
     @State private var defaultFixedCost: Decimal = 0
@@ -72,7 +71,6 @@ struct SettingsView: View {
                         .onChange(of: doubleCurrency) { _, newValue in
                             if !newValue {
                                 transactionCurrency = baseCurrency
-                                currencyRate = 1.0
                             }
                             saveSettings()
                         }
@@ -113,22 +111,6 @@ struct SettingsView: View {
                         .onChange(of: transactionCurrency) { _, _ in saveSettings() }
                     }
 
-                    if doubleCurrency {
-                        HStack {
-                            Text("Currency Rate")
-                            Spacer()
-                            DecimalTextFieldNonOptional(
-                                label: "Rate",
-                                value: $currencyRate,
-                                fractionDigits: 6,
-                                includeGrouping: false,
-                                tab: tab
-                            )
-                            .multilineTextAlignment(.trailing)
-                            .focused($focusedField, equals: .currencyRate)
-                            .onChange(of: currencyRate) { _, _ in saveSettings() }
-                        }
-                    }
                 } header: {
                     HStack {
                         Text("Currency")
@@ -338,7 +320,7 @@ struct SettingsView: View {
     }
 
     enum Field: Hashable {
-        case currencyRate, bankBrokerName, fixedCost, variableCost, maximumCost
+        case bankBrokerName, fixedCost, variableCost, maximumCost
     }
 
     // MARK: - Helper Methods
@@ -348,7 +330,6 @@ struct SettingsView: View {
             doubleCurrency = settings.doubleCurrency
             baseCurrency = settings.baseCurrency
             transactionCurrency = settings.transactionCurrency
-            currencyRate = settings.currencyRate
             applyCost = settings.applyCost
             bankBrokerName = settings.bankBrokerName
             defaultFixedCost = settings.defaultFixedCost
@@ -372,7 +353,6 @@ struct SettingsView: View {
         settings.doubleCurrency = doubleCurrency
         settings.baseCurrency = baseCurrency
         settings.transactionCurrency = transactionCurrency
-        settings.currencyRate = currencyRate
         settings.applyCost = applyCost
         settings.bankBrokerName = bankBrokerName
         settings.defaultFixedCost = defaultFixedCost
@@ -422,8 +402,6 @@ struct SettingsView: View {
 
     private func clearCurrentField() {
         switch focusedField {
-        case .currencyRate:
-            currencyRate = 1.0
         case .bankBrokerName:
             bankBrokerName = ""
         case .fixedCost:
@@ -441,11 +419,7 @@ struct SettingsView: View {
     private func moveToPreviousField() {
         switch focusedField {
         case .bankBrokerName:
-            if doubleCurrency {
-                focusedField = .currencyRate
-            } else {
-                focusedField = nil
-            }
+            focusedField = nil
         case .fixedCost:
             focusedField = .bankBrokerName
         case .variableCost:
@@ -459,8 +433,6 @@ struct SettingsView: View {
 
     private func moveToNextField() {
         switch focusedField {
-        case .currencyRate:
-            focusedField = .bankBrokerName
         case .bankBrokerName:
             if applyCost {
                 focusedField = .fixedCost
@@ -474,7 +446,7 @@ struct SettingsView: View {
         case .maximumCost:
             focusedField = nil
         default:
-            focusedField = .currencyRate
+            focusedField = .bankBrokerName
         }
     }
 }

@@ -32,9 +32,11 @@ struct ProjectionDetailView: View {
     @State private var maximumCost: Decimal?
     @State private var bankBrokerName: String
     @State private var providerName: String?
+    @State private var transactionType: TransactionType
 
     @FocusState private var focusedField: Field?
     @State private var hasChanges = false
+    @State private var isFetchingRate = false
 
     private var settings: Settings? {
         settingsQuery.first
@@ -68,6 +70,7 @@ struct ProjectionDetailView: View {
         _maximumCost = State(initialValue: projection.maximumCost)
         _bankBrokerName = State(initialValue: projection.bankBrokerName)
         _providerName = State(initialValue: projection.providerName)
+        _transactionType = State(initialValue: projection.transactionType)
     }
 
     // MARK: - Computed Properties (mirror Projection model)
@@ -121,6 +124,13 @@ struct ProjectionDetailView: View {
         Form {
             // MARK: - Details Section
             Section {
+                Picker("Transaction Type", selection: $transactionType) {
+                    ForEach(TransactionType.allCases) { type in
+                        Text(type.rawValue).tag(type)
+                    }
+                }
+                .onChange(of: transactionType) { _, _ in hasChanges = true }
+
                 HStack {
                     TextField("Name (optional)", text: $name)
                         .onChange(of: name) { _, _ in hasChanges = true }
@@ -154,131 +164,13 @@ struct ProjectionDetailView: View {
                 }
 
                 DatePicker("Transaction Date", selection: $transactionDate, in: Date()..., displayedComponents: .date)
-                    .onChange(of: transactionDate) { _, _ in hasChanges = true }
+                    .onChange(of: transactionDate) { _, _ in
+                        hasChanges = true
+                        fetchCurrencyRate()
+                    }
+
             } header: {
                 Text("Details")
-                    .foregroundStyle(tab.color())
-            }
-
-            // MARK: - Amounts Section
-            Section {
-                HStack {
-                    Text("Base Amount Available")
-                    Spacer()
-                    DecimalTextFieldNonOptional(
-                        label: "Amount",
-                        value: $baseAmountAvailable,
-                        fractionDigits: 2,
-                        suffix: baseCurrency,
-                        tab: tab
-                    )
-                    .multilineTextAlignment(.trailing)
-                    .focused($focusedField, equals: .baseAmountAvailable)
-                    .onChange(of: baseAmountAvailable) { _, _ in hasChanges = true }
-                }
-
-                HStack {
-                    Text("Transaction Amount")
-                    Spacer()
-                    Text(transactionAmountAvailable.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + transactionCurrency)
-                        .foregroundColor(.secondary)
-                }
-            } header: {
-                Text("Available Amounts")
-                    .foregroundStyle(tab.color())
-            }
-
-            // MARK: - Stock Details Section
-            Section {
-                HStack {
-                    Text("Stock Price")
-                    Spacer()
-                    DecimalTextFieldNonOptional(
-                        label: "Price",
-                        value: $stockPrice,
-                        fractionDigits: 2,
-                        suffix: transactionCurrency,
-                        tab: tab
-                    )
-                    .multilineTextAlignment(.trailing)
-                    .focused($focusedField, equals: .stockPrice)
-                    .onChange(of: stockPrice) { _, _ in hasChanges = true }
-                }
-
-                HStack {
-                    Text("Projected Stocks")
-                    Spacer()
-                    Text("\(numberOfStocks)")
-                        .foregroundColor(.secondary)
-                }
-
-                HStack {
-                    Text(actualNumberOfStocks <= 0 ? "Projected Stocks" : "Actual Stocks")
-                    Spacer()
-                    TextField("0", value: Binding(
-                        get: { actualNumberOfStocks <= 0 ? numberOfStocks : actualNumberOfStocks },
-                        set: { actualNumberOfStocks = $0 }
-                    ), format: .number)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .actualNumberOfStocks)
-                        .onChange(of: actualNumberOfStocks) { _, newValue in
-                            // Clamp to numberOfStocks
-                            if newValue > numberOfStocks {
-                                actualNumberOfStocks = numberOfStocks
-                            }
-                            hasChanges = true
-                        }
-                }
-
-                if actualNumberOfStocks > numberOfStocks {
-                    HStack {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.yellow)
-                        Text("Actual stocks cannot exceed \(numberOfStocks)")
-                            .font(.caption)
-                            .foregroundColor(.yellow)
-                    }
-                }
-            } header: {
-                Text("Stock Details")
-                    .foregroundStyle(tab.color())
-            }
-
-            // MARK: - Currency Section
-            Section {
-                Picker("Base Currency", selection: $baseCurrency) {
-                    ForEach(settings?.availableCurrencies ?? [], id: \.self) { currency in
-                        Text(currency).tag(currency)
-                    }
-                }
-                .onChange(of: baseCurrency) { _, _ in hasChanges = true }
-
-                if settings?.doubleCurrency ?? true {
-                    Picker("Transaction Currency", selection: $transactionCurrency) {
-                        ForEach(settings?.availableCurrencies ?? [], id: \.self) { currency in
-                            Text(currency).tag(currency)
-                        }
-                    }
-                    .onChange(of: transactionCurrency) { _, _ in hasChanges = true }
-
-                    HStack {
-                        Text("Currency Rate")
-                        Spacer()
-                        DecimalTextFieldNonOptional(
-                            label: "Rate",
-                            value: $currencyRate,
-                            fractionDigits: 6,
-                            includeGrouping: false,
-                            tab: tab
-                        )
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .currencyRate)
-                        .onChange(of: currencyRate) { _, _ in hasChanges = true }
-                    }
-                }
-            } header: {
-                Text("Currency")
                     .foregroundStyle(tab.color())
             }
 
@@ -320,8 +212,150 @@ struct ProjectionDetailView: View {
                     .foregroundStyle(tab.color())
             }
 
+            // MARK: - Amounts Section
+            Section {
+                HStack {
+                    Text("Base Amount Available")
+                    Spacer()
+                    DecimalTextFieldNonOptional(
+                        label: "Amount",
+                        value: $baseAmountAvailable,
+                        fractionDigits: 2,
+                        suffix: baseCurrency,
+                        tab: tab
+                    )
+                    .multilineTextAlignment(.trailing)
+                    .focused($focusedField, equals: .baseAmountAvailable)
+                    .onChange(of: baseAmountAvailable) { _, _ in hasChanges = true }
+                }
+
+                HStack {
+                    Text("Transaction Amount")
+                    Spacer()
+                    Text(transactionAmountAvailable.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + transactionCurrency)
+                        .foregroundColor(.secondary)
+                }
+            } header: {
+                Text("Available Amounts")
+                    .foregroundStyle(tab.color())
+            }
+
+            // MARK: - Stock Details Section
+            if transactionType != .deposit && transactionType != .withdrawal {
+                Section {
+                    HStack {
+                        Text("Stock Price")
+                        Spacer()
+                        DecimalTextFieldNonOptional(
+                            label: "Price",
+                            value: $stockPrice,
+                            fractionDigits: 2,
+                            suffix: transactionCurrency,
+                            tab: tab
+                        )
+                        .multilineTextAlignment(.trailing)
+                        .focused($focusedField, equals: .stockPrice)
+                        .onChange(of: stockPrice) { _, _ in hasChanges = true }
+                    }
+
+                    HStack {
+                        Text("Projected Stocks")
+                        Spacer()
+                        Text("\(numberOfStocks)")
+                            .foregroundColor(.secondary)
+                    }
+
+                    HStack {
+                        Text(actualNumberOfStocks <= 0 ? "Projected Stocks" : "Actual Stocks")
+                        Spacer()
+                        TextField("0", value: Binding(
+                            get: { actualNumberOfStocks <= 0 ? numberOfStocks : actualNumberOfStocks },
+                            set: { actualNumberOfStocks = $0 }
+                        ), format: .number)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .focused($focusedField, equals: .actualNumberOfStocks)
+                            .onChange(of: actualNumberOfStocks) { _, newValue in
+                                // Clamp to numberOfStocks
+                                if newValue > numberOfStocks {
+                                    actualNumberOfStocks = numberOfStocks
+                                }
+                                hasChanges = true
+                            }
+                    }
+
+                    if actualNumberOfStocks > numberOfStocks {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundColor(.yellow)
+                            Text("Actual stocks cannot exceed \(numberOfStocks)")
+                                .font(.caption)
+                                .foregroundColor(.yellow)
+                        }
+                    }
+                } header: {
+                    Text("Stock Details")
+                        .foregroundStyle(tab.color())
+                }
+            }
+
+            // MARK: - Currency Section
+            Section {
+                Picker("Base Currency", selection: $baseCurrency) {
+                    ForEach(settings?.availableCurrencies ?? [], id: \.self) { currency in
+                        Text(currency).tag(currency)
+                    }
+                }
+                .onChange(of: baseCurrency) { _, _ in
+                    hasChanges = true
+                    fetchCurrencyRate()
+                }
+
+                if settings?.doubleCurrency ?? true {
+                    Picker("Transaction Currency", selection: $transactionCurrency) {
+                        ForEach(settings?.availableCurrencies ?? [], id: \.self) { currency in
+                            Text(currency).tag(currency)
+                        }
+                    }
+                    .onChange(of: transactionCurrency) { _, _ in
+                        hasChanges = true
+                        fetchCurrencyRate()
+                    }
+
+                    HStack {
+                        Text("Currency Rate")
+                        Spacer()
+                        if isFetchingRate {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        }
+                        DecimalTextFieldNonOptional(
+                            label: "Rate",
+                            value: $currencyRate,
+                            fractionDigits: 6,
+                            includeGrouping: false,
+                            tab: tab
+                        )
+                        .multilineTextAlignment(.trailing)
+                        .focused($focusedField, equals: .currencyRate)
+                        .onChange(of: currencyRate) { _, _ in hasChanges = true }
+
+                        Button(action: {
+                            fetchCurrencyRate()
+                        }) {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .circleBackground(fgColor: tab.color(), font: .body.bold(), size: 5)
+                        .disabled(isFetchingRate)
+                    }
+                }
+            } header: {
+                Text("Currency")
+                    .foregroundStyle(tab.color())
+            }
+
             // MARK: - Costs Section (conditional on applyCost)
-            if settings?.applyCost ?? true {
+            if (settings?.applyCost ?? true) && transactionType != .deposit && transactionType != .withdrawal {
                 Section {
                     HStack {
                         Text("Fixed Cost")
@@ -388,30 +422,32 @@ struct ProjectionDetailView: View {
             }
 
             // MARK: - Results Section
-            Section {
-                HStack {
-                    Text("Investable Amount")
-                    Spacer()
-                    Text(investableAmount.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + transactionCurrency)
-                        .foregroundColor(.secondary)
-                }
+            if transactionType != .deposit && transactionType != .withdrawal {
+                Section {
+                    HStack {
+                        Text("Investable Amount")
+                        Spacer()
+                        Text(investableAmount.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + transactionCurrency)
+                            .foregroundColor(.secondary)
+                    }
 
-                HStack {
-                    Text("Invested Amount")
-                    Spacer()
-                    Text(investedAmount.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + transactionCurrency)
-                        .foregroundColor(.secondary)
-                }
+                    HStack {
+                        Text("Invested Amount")
+                        Spacer()
+                        Text(investedAmount.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + transactionCurrency)
+                            .foregroundColor(.secondary)
+                    }
 
-                HStack {
-                    Text("Remaining Amount")
-                    Spacer()
-                    Text(remainingAmount.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + transactionCurrency)
-                        .foregroundColor(.secondary)
+                    HStack {
+                        Text("Remaining Amount")
+                        Spacer()
+                        Text(remainingAmount.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + transactionCurrency)
+                            .foregroundColor(.secondary)
+                    }
+                } header: {
+                    Text("Results")
+                        .foregroundStyle(tab.color())
                 }
-            } header: {
-                Text("Results")
-                    .foregroundStyle(tab.color())
             }
 
             // MARK: - Information Section
@@ -488,6 +524,7 @@ struct ProjectionDetailView: View {
         projection.name = name.isEmpty ? nil : name
         projection.ticker = ticker
         projection.transactionDate = transactionDate
+        projection.transactionType = transactionType
         projection.baseAmountAvailable = baseAmountAvailable
         projection.stockPrice = stockPrice
         projection.actualNumberOfStocks = actualNumberOfStocks
@@ -511,7 +548,6 @@ struct ProjectionDetailView: View {
 
         baseCurrency = settings.baseCurrency
         transactionCurrency = settings.transactionCurrency
-        currencyRate = settings.effectiveCurrencyRate
         bankBrokerName = settings.bankBrokerName
         providerName = nil
 
@@ -525,6 +561,9 @@ struct ProjectionDetailView: View {
             maximumCost = nil
         }
 
+        // Fetch the current currency rate
+        fetchCurrencyRate()
+
         hasChanges = true
     }
 
@@ -534,6 +573,37 @@ struct ProjectionDetailView: View {
         maximumCost = provider.maximumCost
         providerName = provider.bankBrokerName
         hasChanges = true
+    }
+
+    private func fetchCurrencyRate() {
+        // Only fetch if double currency is enabled and currencies are different
+        guard settings?.doubleCurrency ?? true else { return }
+        guard baseCurrency != transactionCurrency else {
+            currencyRate = 1.0
+            return
+        }
+
+        isFetchingRate = true
+
+        Task {
+            do {
+                let rate = try await CurrencyRateService.shared.fetchRate(
+                    from: baseCurrency,
+                    to: transactionCurrency,
+                    on: transactionDate
+                )
+                await MainActor.run {
+                    currencyRate = rate
+                    hasChanges = true
+                    isFetchingRate = false
+                }
+            } catch {
+                await MainActor.run {
+                    isFetchingRate = false
+                }
+                print("Failed to fetch currency rate: \(error.localizedDescription)")
+            }
+        }
     }
 
     // MARK: - Keyboard Navigation

@@ -34,9 +34,11 @@ struct InvestmentDetailView: View {
     @State private var maximumCost: Decimal
     @State private var bankBrokerName: String
     @State private var providerName: String
+    @State private var transactionType: TransactionType
 
     @FocusState private var focusedField: Field?
     @State private var hasChanges = false
+    @State private var isFetchingRate = false
 
     init(investment: Investment, tab: AppTab) {
         self.investment = investment
@@ -56,6 +58,7 @@ struct InvestmentDetailView: View {
         _maximumCost = State(initialValue: investment.maximumCost)
         _bankBrokerName = State(initialValue: investment.bankBrokerName)
         _providerName = State(initialValue: investment.providerName ?? "")
+        _transactionType = State(initialValue: investment.transactionType)
     }
 
     // MARK: - Computed Properties
@@ -95,6 +98,14 @@ struct InvestmentDetailView: View {
         Form {
             // MARK: - Details Section
             Section {
+                Picker("Transaction Type", selection: $transactionType) {
+                    ForEach(TransactionType.allCases) { type in
+                        Text(type.rawValue).tag(type)
+                    }
+                }
+                .onChange(of: transactionType) { _, _ in hasChanges = true }
+                
+
                 HStack {
                     TextField("Name (optional)", text: $name)
                         .focused($focusedField, equals: .name)
@@ -129,7 +140,10 @@ struct InvestmentDetailView: View {
                 }
 
                 DatePicker("Transaction Date", selection: $transactionDate, displayedComponents: .date)
-                    .onChange(of: transactionDate) { _, _ in hasChanges = true }
+                    .onChange(of: transactionDate) { _, _ in
+                        hasChanges = true
+                        fetchCurrencyRate()
+                    }
 
                 HStack {
                     TextField("Bank/Broker Name", text: $bankBrokerName)
@@ -151,34 +165,36 @@ struct InvestmentDetailView: View {
             }
 
             // MARK: - Investment Details Section
-            Section {
-                HStack {
-                    Text("Number of Stocks")
-                    Spacer()
-                    TextField("0", text: $numberOfStocks)
-                        .keyboardType(.numberPad)
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .numberOfStocks)
-                        .onChange(of: numberOfStocks) { _, _ in hasChanges = true }
-                }
+            if transactionType != .deposit && transactionType != .withdrawal {
+                Section {
+                    HStack {
+                        Text("Number of Stocks")
+                        Spacer()
+                        TextField("0", text: $numberOfStocks)
+                            .keyboardType(.numberPad)
+                            .multilineTextAlignment(.trailing)
+                            .focused($focusedField, equals: .numberOfStocks)
+                            .onChange(of: numberOfStocks) { _, _ in hasChanges = true }
+                    }
 
-                HStack {
-                    Text("Stock Price")
-                    Spacer()
-                    DecimalTextFieldNonOptional(
-                        label: "Price",
-                        value: $stockPrice,
-                        fractionDigits: 2,
-                        suffix: transactionCurrency,
-                        tab: tab
-                    )
-                    .multilineTextAlignment(.trailing)
-                    .focused($focusedField, equals: .stockPrice)
-                    .onChange(of: stockPrice) { _, _ in hasChanges = true }
+                    HStack {
+                        Text("Stock Price")
+                        Spacer()
+                        DecimalTextFieldNonOptional(
+                            label: "Price",
+                            value: $stockPrice,
+                            fractionDigits: 2,
+                            suffix: transactionCurrency,
+                            tab: tab
+                        )
+                        .multilineTextAlignment(.trailing)
+                        .focused($focusedField, equals: .stockPrice)
+                        .onChange(of: stockPrice) { _, _ in hasChanges = true }
+                    }
+                } header: {
+                    Text("Investment Details")
+                        .foregroundStyle(tab.color())
                 }
-            } header: {
-                Text("Investment Details")
-                    .foregroundStyle(tab.color())
             }
 
             // MARK: - Currency Section
@@ -190,7 +206,10 @@ struct InvestmentDetailView: View {
                         .multilineTextAlignment(.trailing)
                         .textInputAutocapitalization(.characters)
                         .focused($focusedField, equals: .baseCurrency)
-                        .onChange(of: baseCurrency) { _, _ in hasChanges = true }
+                        .onChange(of: baseCurrency) { _, _ in
+                            hasChanges = true
+                            fetchCurrencyRate()
+                        }
                 }
 
                 if settings?.doubleCurrency == true {
@@ -201,12 +220,19 @@ struct InvestmentDetailView: View {
                             .multilineTextAlignment(.trailing)
                             .textInputAutocapitalization(.characters)
                             .focused($focusedField, equals: .transactionCurrency)
-                            .onChange(of: transactionCurrency) { _, _ in hasChanges = true }
+                            .onChange(of: transactionCurrency) { _, _ in
+                                hasChanges = true
+                                fetchCurrencyRate()
+                            }
                     }
 
                     HStack {
                         Text("Currency Rate")
                         Spacer()
+                        if isFetchingRate {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        }
                         DecimalTextFieldNonOptional(
                             label: "Rate",
                             value: $currencyRate,
@@ -217,6 +243,14 @@ struct InvestmentDetailView: View {
                         .multilineTextAlignment(.trailing)
                         .focused($focusedField, equals: .currencyRate)
                         .onChange(of: currencyRate) { _, _ in hasChanges = true }
+
+                        Button(action: {
+                            fetchCurrencyRate()
+                        }) {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        .circleBackground(fgColor: tab.color(), font: .body.bold(), size: 5)
+                        .disabled(isFetchingRate)
                     }
                 }
             } header: {
@@ -225,73 +259,76 @@ struct InvestmentDetailView: View {
             }
 
             // MARK: - Costs Section
-            Section {
-                HStack {
-                    Text("Fixed Cost")
-                    Spacer()
-                    DecimalTextFieldNonOptional(
-                        label: "Fixed",
-                        value: $fixedCost,
-                        fractionDigits: 2,
-                        suffix: baseCurrency,
-                        tab: tab
-                    )
-                    .multilineTextAlignment(.trailing)
-                    .focused($focusedField, equals: .fixedCost)
-                    .onChange(of: fixedCost) { _, _ in hasChanges = true }
-                }
-
-                HStack {
-                    Text("Variable Cost")
-                    Spacer()
-                    PercentageTextField(
-                        label: "Variable",
-                        tab: tab,
-                        value: $variableCost
-                    )
-                    .multilineTextAlignment(.trailing)
-                    .focused($focusedField, equals: .variableCost)
-                    .onChange(of: variableCost) { _, _ in hasChanges = true }
-                }
-
-                HStack {
-                    Text("Maximum Cost")
-                    Spacer()
-                    DecimalTextFieldNonOptional(
-                        label: "Maximum",
-                        value: $maximumCost,
-                        fractionDigits: 2,
-                        suffix: baseCurrency,
-                        tab: tab
-                    )
-                    .multilineTextAlignment(.trailing)
-                    .focused($focusedField, equals: .maximumCost)
-                    .onChange(of: maximumCost) { _, _ in hasChanges = true }
-                }
-
-                HStack {
-                    Text("Total Cost")
-                    Spacer()
-                    Text(totalCost.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + baseCurrency)
-                        .foregroundColor(.secondary)
-                }
-            } header: {
-                HStack {
-                    Text("Costs")
-                        .foregroundStyle(tab.color())
-                    Spacer()
-                    // Reload button to load costs from settings
-                    Button(action: {
-                        reloadCostsFromSettings()
-                    }) {
-                        Image(systemName: "arrow.counterclockwise")
+            if transactionType != .deposit && transactionType != .withdrawal {
+                Section {
+                    HStack {
+                        Text("Fixed Cost")
+                        Spacer()
+                        DecimalTextFieldNonOptional(
+                            label: "Fixed",
+                            value: $fixedCost,
+                            fractionDigits: 2,
+                            suffix: baseCurrency,
+                            tab: tab
+                        )
+                        .multilineTextAlignment(.trailing)
+                        .focused($focusedField, equals: .fixedCost)
+                        .onChange(of: fixedCost) { _, _ in hasChanges = true }
                     }
-                    .circleBackground(fgColor: tab.color(), font: .body.bold(), size: 5)
+
+                    HStack {
+                        Text("Variable Cost")
+                        Spacer()
+                        PercentageTextField(
+                            label: "Variable",
+                            tab: tab,
+                            value: $variableCost
+                        )
+                        .multilineTextAlignment(.trailing)
+                        .focused($focusedField, equals: .variableCost)
+                        .onChange(of: variableCost) { _, _ in hasChanges = true }
+                    }
+
+                    HStack {
+                        Text("Maximum Cost")
+                        Spacer()
+                        DecimalTextFieldNonOptional(
+                            label: "Maximum",
+                            value: $maximumCost,
+                            fractionDigits: 2,
+                            suffix: baseCurrency,
+                            tab: tab
+                        )
+                        .multilineTextAlignment(.trailing)
+                        .focused($focusedField, equals: .maximumCost)
+                        .onChange(of: maximumCost) { _, _ in hasChanges = true }
+                    }
+
+                    HStack {
+                        Text("Total Cost")
+                        Spacer()
+                        Text(totalCost.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + baseCurrency)
+                            .foregroundColor(.secondary)
+                    }
+                } header: {
+                    HStack {
+                        Text("Costs")
+                            .foregroundStyle(tab.color())
+                        Spacer()
+                        // Reload button to load costs from settings
+                        Button(action: {
+                            reloadCostsFromSettings()
+                        }) {
+                            Image(systemName: "arrow.counterclockwise")
+                        }
+                        .circleBackground(fgColor: tab.color(), font: .body.bold(), size: 5)
+                    }
                 }
             }
 
             // MARK: - Results Section
-            Section {
+            if transactionType != .deposit && transactionType != .withdrawal {
+                Section {
                 HStack {
                     Text("Total Invested")
                     Spacer()
@@ -317,6 +354,7 @@ struct InvestmentDetailView: View {
             } header: {
                 Text("Results")
                     .foregroundStyle(tab.color())
+            }
             }
 
             // MARK: - Information Section
@@ -403,6 +441,7 @@ struct InvestmentDetailView: View {
         investment.name = name.isEmpty ? nil : name
         investment.ticker = ticker
         investment.transactionDate = transactionDate
+        investment.transactionType = transactionType
         investment.numberOfStocks = numberOfStocksInt
         investment.stockPrice = stockPrice
         investment.baseCurrency = baseCurrency
@@ -415,6 +454,24 @@ struct InvestmentDetailView: View {
         investment.providerName = providerName.isEmpty ? nil : providerName
         investment.modifiedAt = Date()
 
+        // Update associated Balance record
+        if let balance = investment.balance {
+            balance.transactionDate = transactionDate
+            balance.transactionType = transactionType
+            balance.bankBrokerName = bankBrokerName
+            balance.ticker = ticker
+            balance.name = name.isEmpty ? nil : name
+            balance.numberOfStocks = numberOfStocksInt
+            balance.stockPrice = stockPrice
+            balance.transactionCost = investment.totalCost
+            balance.modifiedAt = Date()
+        } else {
+            // Create Balance if it doesn't exist
+            let newBalance = Balance.from(investment)
+            modelContext.insert(newBalance)
+            investment.balance = newBalance
+        }
+
         try? modelContext.save()
         hasChanges = false
         dismiss()
@@ -426,6 +483,37 @@ struct InvestmentDetailView: View {
         variableCost = settings.defaultVariableCost
         maximumCost = settings.defaultMaximumCost ?? 0
         hasChanges = true
+    }
+
+    private func fetchCurrencyRate() {
+        // Only fetch if double currency is enabled and currencies are different
+        guard settings?.doubleCurrency == true else { return }
+        guard baseCurrency != transactionCurrency else {
+            currencyRate = 1.0
+            return
+        }
+
+        isFetchingRate = true
+
+        Task {
+            do {
+                let rate = try await CurrencyRateService.shared.fetchRate(
+                    from: baseCurrency,
+                    to: transactionCurrency,
+                    on: transactionDate
+                )
+                await MainActor.run {
+                    currencyRate = rate
+                    hasChanges = true
+                    isFetchingRate = false
+                }
+            } catch {
+                await MainActor.run {
+                    isFetchingRate = false
+                }
+                print("Failed to fetch currency rate: \(error.localizedDescription)")
+            }
+        }
     }
 
     private func clearCurrentField() {

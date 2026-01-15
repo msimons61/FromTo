@@ -12,9 +12,14 @@ struct BankBrokerCostDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query private var allProviders: [BankBrokerCost]
+    @Query private var settingsQuery: [Settings]
 
     let provider: BankBrokerCost
     let tab: AppTab
+
+    private var settings: Settings? {
+        settingsQuery.first
+    }
 
     // Draft copies for editing
     @State private var bankBrokerName: String
@@ -24,6 +29,7 @@ struct BankBrokerCostDetailView: View {
     @State private var fixedCost: Decimal
     @State private var variableCostRate: Decimal
     @State private var maximumCost: Decimal
+    @State private var startingBalance: Decimal
 
     @FocusState private var focusedField: Field?
     @State private var hasChanges = false
@@ -35,6 +41,7 @@ struct BankBrokerCostDetailView: View {
         case fixedCost
         case variableCostRate
         case maximumCost
+        case startingBalance
     }
 
     init(provider: BankBrokerCost, tab: AppTab) {
@@ -49,6 +56,7 @@ struct BankBrokerCostDetailView: View {
         _fixedCost = State(initialValue: provider.fixedCost)
         _variableCostRate = State(initialValue: provider.variableCostRate)
         _maximumCost = State(initialValue: provider.maximumCost)
+        _startingBalance = State(initialValue: provider.startingBalance)
     }
 
     var body: some View {
@@ -76,6 +84,31 @@ struct BankBrokerCostDetailView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundColor(.yellow)
                         Text("Bank/Broker name is required")
+                            .font(.caption)
+                            .foregroundColor(.yellow)
+                    }
+                }
+
+                HStack {
+                    Text("Starting Balance")
+                    Spacer()
+                    DecimalTextFieldNonOptional(
+                        label: "Balance",
+                        value: $startingBalance,
+                        fractionDigits: 2,
+                        suffix: settings?.baseCurrency ?? "USD",
+                        tab: tab
+                    )
+                    .multilineTextAlignment(.trailing)
+                    .focused($focusedField, equals: .startingBalance)
+                    .onChange(of: startingBalance) { _, _ in hasChanges = true }
+                }
+
+                if startingBalance <= 0 {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.yellow)
+                        Text("Starting balance must be greater than 0")
                             .font(.caption)
                             .foregroundColor(.yellow)
                     }
@@ -243,6 +276,7 @@ struct BankBrokerCostDetailView: View {
     // MARK: - Validation
     private var isValid: Bool {
         guard !bankBrokerName.isEmpty else { return false }
+        guard startingBalance > 0 else { return false }
         guard fixedCost >= 0, variableCostRate >= 0, maximumCost >= 0 else { return false }
         if let end = endDate {
             return startDate <= end
@@ -265,6 +299,7 @@ struct BankBrokerCostDetailView: View {
         provider.fixedCost = fixedCost
         provider.variableCostRate = variableCostRate
         provider.maximumCost = maximumCost
+        provider.startingBalance = startingBalance
         provider.modifiedAt = Date()
 
         try? modelContext.save()
@@ -302,8 +337,10 @@ struct BankBrokerCostDetailView: View {
     // MARK: - Keyboard Navigation
     private func moveToPreviousField() {
         switch focusedField {
-        case .fixedCost:
+        case .startingBalance:
             focusedField = .bankBrokerName
+        case .fixedCost:
+            focusedField = .startingBalance
         case .variableCostRate:
             focusedField = .fixedCost
         case .maximumCost:
@@ -316,6 +353,8 @@ struct BankBrokerCostDetailView: View {
     private func moveToNextField() {
         switch focusedField {
         case .bankBrokerName:
+            focusedField = .startingBalance
+        case .startingBalance:
             focusedField = .fixedCost
         case .fixedCost:
             focusedField = .variableCostRate
@@ -338,6 +377,8 @@ struct BankBrokerCostDetailView: View {
             variableCostRate = 0
         case .maximumCost:
             maximumCost = 0
+        case .startingBalance:
+            startingBalance = 0
         default:
             break
         }

@@ -21,6 +21,11 @@ final class Investment {
     var transactionCurrency: String = "EUR"
     var bankBrokerName: String = ""
     var providerName: String? = nil
+    private var transactionTypeString: String = "Buy"
+
+    // Relationship to Balance (cascade delete)
+    @Relationship(deleteRule: .cascade, inverse: \Balance.investment)
+    var balance: Balance?
 
     // Stored properties as String (perfect Decimal precision)
     private var stockPriceString: String = "0"
@@ -42,7 +47,8 @@ final class Investment {
         transactionCurrency: String = "EUR",
         bankBrokerName: String = "",
         providerName: String? = nil,
-        transactionDate: Date = Date()
+        transactionDate: Date = Date(),
+        transactionType: TransactionType = .buy
     ) {
         self.id = UUID()
         self.createdAt = Date()
@@ -55,6 +61,7 @@ final class Investment {
         self.transactionCurrency = transactionCurrency
         self.bankBrokerName = bankBrokerName
         self.providerName = providerName
+        self.transactionTypeString = transactionType.rawValue
 
         // Store Decimals as Strings for perfect precision
         self.stockPriceString = "\(stockPrice)"
@@ -96,6 +103,15 @@ extension Investment {
         get { Decimal(string: maximumCostString) ?? 0 }
         set {
             maximumCostString = "\(newValue)"
+            modifiedAt = Date()
+        }
+    }
+
+    /// Transaction type (buy or sell)
+    var transactionType: TransactionType {
+        get { TransactionType(rawValue: transactionTypeString) ?? .buy }
+        set {
+            transactionTypeString = newValue.rawValue
             modifiedAt = Date()
         }
     }
@@ -154,7 +170,8 @@ extension Investment {
             transactionCurrency: projection.transactionCurrency,
             bankBrokerName: projection.bankBrokerName,
             providerName: projection.providerName,
-            transactionDate: projection.transactionDate
+            transactionDate: projection.transactionDate,
+            transactionType: projection.transactionType
         )
     }
 }

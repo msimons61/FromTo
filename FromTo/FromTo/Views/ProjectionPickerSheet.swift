@@ -51,6 +51,12 @@ struct ProjectionPickerSheet: View {
     private func createInvestmentFromProjection(_ projection: Projection) {
         let newInvestment = Investment.from(projection)
         modelContext.insert(newInvestment)
+
+        // Create associated Balance record
+        let newBalance = Balance.from(newInvestment)
+        modelContext.insert(newBalance)
+        newInvestment.balance = newBalance
+
         try? modelContext.save()
 
         onCreate(newInvestment)

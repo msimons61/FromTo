@@ -39,6 +39,7 @@ final class Projection {
     // Bank/Broker and Provider
     var bankBrokerName: String = ""
     var providerName: String? = nil
+    private var transactionTypeString: String = "Buy"
 
     init(
         baseAmountAvailable: Decimal = 0,
@@ -54,7 +55,8 @@ final class Projection {
         transactionCurrency: String = "EUR",
         bankBrokerName: String = "",
         providerName: String? = nil,
-        transactionDate: Date = Date()
+        transactionDate: Date = Date(),
+        transactionType: TransactionType = .buy
     ) {
         self.id = UUID()
         self.createdAt = Date()
@@ -66,6 +68,7 @@ final class Projection {
         self.transactionCurrency = transactionCurrency
         self.bankBrokerName = bankBrokerName
         self.providerName = providerName
+        self.transactionTypeString = transactionType.rawValue
 
         // Store Decimals as Strings for perfect precision
         self.baseAmountAvailableString = "\(baseAmountAvailable)"
@@ -146,6 +149,15 @@ extension Projection {
             // Clamp to projected numberOfStocks
             let clamped = min(newValue, numberOfStocks)
             actualNumberOfStocksString = "\(max(0, clamped))"
+            modifiedAt = Date()
+        }
+    }
+
+    /// Transaction type (buy or sell)
+    var transactionType: TransactionType {
+        get { TransactionType(rawValue: transactionTypeString) ?? .buy }
+        set {
+            transactionTypeString = newValue.rawValue
             modifiedAt = Date()
         }
     }

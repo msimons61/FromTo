@@ -21,7 +21,8 @@ class SwiftDataService {
             Investment.self,
             Projection.self,
             Settings.self,
-            BankBrokerCost.self
+            BankBrokerCost.self,
+            Balance.self
         ])
 
         do {
@@ -45,7 +46,8 @@ class SwiftDataService {
                     for: Investment.self,
                     Projection.self,
                     Settings.self,
-                    BankBrokerCost.self
+                    BankBrokerCost.self,
+                    Balance.self
                 )
                 print("Successfully created local-only ModelContainer")
             } catch {

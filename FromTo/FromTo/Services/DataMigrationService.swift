@@ -61,7 +61,6 @@ class DataMigrationService {
 
         let fromCurrency = cloudStore.getString(forKey: "com.fromto.settings.fromCurrency") ?? "USD"
         let toCurrency = cloudStore.getString(forKey: "com.fromto.settings.toCurrency") ?? "EUR"
-        let currencyRate = cloudStore.getDecimal(forKey: "com.fromto.settings.currencyRate") ?? 1.0
 
         let defaultFixedCost = cloudStore.getDecimal(forKey: "com.fromto.settings.defaultFixedCost") ?? 0
         let defaultVariableCost = cloudStore.getDecimal(forKey: "com.fromto.settings.defaultVariableCost") ?? 0
@@ -73,7 +72,6 @@ class DataMigrationService {
             doubleCurrency: isDoubleCurrencyEnabled,
             baseCurrency: fromCurrency,
             transactionCurrency: toCurrency,
-            currencyRate: currencyRate,
             applyCost: isApplyCostEnabled,
             bankBrokerName: "",
             defaultFixedCost: defaultFixedCost,

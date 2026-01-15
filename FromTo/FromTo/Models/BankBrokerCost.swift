@@ -23,6 +23,7 @@ final class BankBrokerCost {
     private var fixedCostString: String = "0"
     private var variableCostRateString: String = "0"
     private var maximumCostString: String = "0"
+    private var startingBalanceString: String = "0"
 
     init(
         bankBrokerName: String = "",
@@ -30,7 +31,8 @@ final class BankBrokerCost {
         endDate: Date? = nil,
         fixedCost: Decimal = 0,
         variableCostRate: Decimal = 0,
-        maximumCost: Decimal = 0
+        maximumCost: Decimal = 0,
+        startingBalance: Decimal = 0
     ) {
         self.id = UUID()
         self.createdAt = Date()
@@ -41,6 +43,7 @@ final class BankBrokerCost {
         self.fixedCostString = "\(fixedCost)"
         self.variableCostRateString = "\(variableCostRate)"
         self.maximumCostString = "\(maximumCost)"
+        self.startingBalanceString = "\(startingBalance)"
     }
 }
 
@@ -72,6 +75,15 @@ extension BankBrokerCost {
             modifiedAt = Date()
         }
     }
+
+    /// Starting balance as Decimal with perfect precision
+    var startingBalance: Decimal {
+        get { Decimal(string: startingBalanceString) ?? 0 }
+        set {
+            startingBalanceString = "\(newValue)"
+            modifiedAt = Date()
+        }
+    }
 }
 
 // MARK: - Validation & Computed Properties
@@ -79,6 +91,7 @@ extension BankBrokerCost {
     /// Validates that the provider cost data is valid
     var isValid: Bool {
         guard !bankBrokerName.isEmpty else { return false }
+        guard startingBalance > 0 else { return false }
         guard fixedCost >= 0, variableCostRate >= 0, maximumCost >= 0 else { return false }
 
         if let end = endDate {
@@ -89,6 +102,9 @@ extension BankBrokerCost {
 
     /// Check if this provider's costs are active on a given date
     func isActive(on date: Date) -> Bool {
+        // Inactive if Bank/Broker name is empty
+        guard !bankBrokerName.isEmpty else { return false }
+
         if let end = endDate {
             return date >= startDate && date <= end
         }
@@ -102,6 +118,10 @@ extension BankBrokerCost {
 
         if bankBrokerName.isEmpty {
             errors.append("Bank/Broker name is required")
+        }
+
+        if startingBalance <= 0 {
+            errors.append("Starting balance must be greater than 0")
         }
 
         if fixedCost < 0 {
