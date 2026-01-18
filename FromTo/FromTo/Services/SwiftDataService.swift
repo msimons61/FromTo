@@ -21,13 +21,15 @@ class SwiftDataService {
             Investment.self,
             Projection.self,
             Settings.self,
-            BankBrokerCost.self,
+            BankBrokerProvider.self,
+            CostComponent.self,
             Balance.self
         ])
 
         do {
-            // Try to create with CloudKit first
+            // Try to create with CloudKit first with migration options
             let modelConfiguration = ModelConfiguration(
+                schema: schema,
                 cloudKitDatabase: .private("iCloud.com.ms61consultancy.FromTo")
             )
 
@@ -39,20 +41,51 @@ class SwiftDataService {
         } catch {
             // If CloudKit fails, fall back to local-only storage
             print("CloudKit ModelContainer failed: \(error)")
+            print("Error details: \(error.localizedDescription)")
+            if let nsError = error as NSError? {
+                print("Error domain: \(nsError.domain)")
+                print("Error code: \(nsError.code)")
+                print("Error userInfo: \(nsError.userInfo)")
+            }
             print("Falling back to local-only storage")
 
             do {
+                let localConfiguration = ModelConfiguration(
+                    schema: schema,
+                    isStoredInMemoryOnly: false
+                )
+
                 modelContainer = try ModelContainer(
-                    for: Investment.self,
-                    Projection.self,
-                    Settings.self,
-                    BankBrokerCost.self,
-                    Balance.self
+                    for: schema,
+                    configurations: [localConfiguration]
                 )
                 print("Successfully created local-only ModelContainer")
             } catch {
                 print("Local ModelContainer also failed: \(error)")
-                fatalError("Could not create ModelContainer even without CloudKit: \(error)")
+                print("Error details: \(error.localizedDescription)")
+                if let nsError = error as NSError? {
+                    print("Error domain: \(nsError.domain)")
+                    print("Error code: \(nsError.code)")
+                    print("Error userInfo: \(nsError.userInfo)")
+                }
+
+                // Try one more time with in-memory storage for debugging
+                print("Attempting in-memory storage as last resort...")
+                do {
+                    let memoryConfiguration = ModelConfiguration(
+                        schema: schema,
+                        isStoredInMemoryOnly: true
+                    )
+
+                    modelContainer = try ModelContainer(
+                        for: schema,
+                        configurations: [memoryConfiguration]
+                    )
+                    print("WARNING: Using in-memory storage - data will not persist!")
+                } catch {
+                    print("Even in-memory storage failed: \(error)")
+                    fatalError("Could not create ModelContainer: \(error)\n\nThis usually means the schema has changed incompatibly. Try deleting the app and reinstalling.")
+                }
             }
         }
     }

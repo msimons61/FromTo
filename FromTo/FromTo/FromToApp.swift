@@ -10,13 +10,20 @@ import SwiftData
 
 @main
 struct FromToApp: App {
-    @StateObject private var settings = SettingsData() // Keep for migration purposes
+    @StateObject private var legacySettings = SettingsData() // Keep for migration purposes
+    @StateObject private var settingsObserver: SettingsObserver
     @State private var showCurrencyUpdateAlert = false
+
+    init() {
+        // Initialize SettingsObserver with ModelContainer
+        let observer = SettingsObserver(modelContainer: SwiftDataService.shared.modelContainer)
+        _settingsObserver = StateObject(wrappedValue: observer)
+    }
 
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .preferredColorScheme(getColorScheme())
+                .preferredColorScheme(settingsObserver.colorScheme)
                 .task {
                     await performMigrations()
                     await updateCurrencyListIfNeeded()
@@ -30,18 +37,10 @@ struct FromToApp: App {
         .modelContainer(SwiftDataService.shared.modelContainer)
     }
 
-    @MainActor
-    private func getColorScheme() -> ColorScheme? {
-        let context = SwiftDataService.shared.modelContainer.mainContext
-        let descriptor = FetchDescriptor<Settings>()
-        guard let settings = try? context.fetch(descriptor).first else { return nil }
-        return settings.colorScheme
-    }
-
     private func performMigrations() async {
         // V2 Migration: New data model
-        let migrationService = await DataMigrationService.shared
-        if await migrationService.needsMigration() {
+        let migrationService = DataMigrationService.shared
+        if migrationService.needsMigration() {
             do {
                 try await migrationService.performMigration(
                     modelContainer: SwiftDataService.shared.modelContainer
@@ -60,7 +59,7 @@ struct FromToApp: App {
         }
 
         // Migrate Settings to iCloud KVS (will be migrated to SwiftData by V2 migration)
-        await settings.performCloudMigration()
+        await legacySettings.performCloudMigration()
 
         // Migrate Difference calculator to iCloud KVS
         let cloudStore = CloudKeyValueStore.shared

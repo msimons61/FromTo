@@ -25,7 +25,7 @@ extension View {
     func kbCircleBackground(
         color: Color,
         bgColor: Color = Color.secondary,
-        padding: CGFloat = 20,
+        padding: CGFloat = 10,
     ) -> some View {
         modifier(
             KbCircleBackground(

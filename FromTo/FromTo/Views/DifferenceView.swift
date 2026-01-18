@@ -41,7 +41,7 @@ struct DifferenceView: View {
                         DecimalTextFieldNonOptional(
                             label: "From",
                             value: $viewModel.fromValue,
-                            fractionDigits: 38,
+                            fractionDigits: 6,
                             tab: tab
                         )
                         .multilineTextAlignment(.trailing)
@@ -55,7 +55,7 @@ struct DifferenceView: View {
                             DecimalTextFieldNonOptional(
                                 label: "To",
                                 value: $viewModel.toValue,
-                                fractionDigits: 38,
+                                fractionDigits: 6,
                                 tab: tab
                             )
                             .multilineTextAlignment(.trailing)
@@ -63,7 +63,7 @@ struct DifferenceView: View {
                         } else {
                             PercentageTextField(
                                 label: "To",
-                                tab:tab,
+                                tab: tab,
                                 value: $viewModel.toValue
                             )
                             .multilineTextAlignment(.trailing)
@@ -72,15 +72,23 @@ struct DifferenceView: View {
                     }
 
                     Picker("Mode", selection: $differenceMode) {
-                        
+
                         ForEach(DifferenceMode.allCases) { mode in
                             Text(mode.rawValue).tag(mode)
                         }
                     }
                     .pickerStyle(.segmented)
                     .colorMultiply(tab.color())
-                    .onChange(of: differenceMode) { _, newMode in
+                    .onChange(of: differenceMode) { oldMode, newMode in
                         viewModel.isRelativeMode = (newMode == .relative)
+                        // Convert toValue when switching modes
+                        if oldMode == .absolute && newMode == .relative {
+                            // Switching to Relative: toValue = Relative Difference
+                            viewModel.toValue = viewModel.relativeDifferenceAbsolute ?? 0
+                        } else if oldMode == .relative && newMode == .absolute {
+                            // Switching to Absolute: toValue = Cumulative Difference
+                            viewModel.toValue = viewModel.cumulativeDifference
+                        }
                     }
                 } header: {
                     HStack {
@@ -139,42 +147,8 @@ struct DifferenceView: View {
                 // Sync differenceMode from viewModel on appear
                 differenceMode = viewModel.isRelativeMode ? .relative : .absolute
             }
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Button(action: {
-                        clearCurrentField()
-                    }) {
-                        Text("Clear")
-                            .kbCapsuleBackground(color: .red)
-                    }
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        moveToPreviousField()
-                    }) {
-                        Image(systemName: "chevron.up")
-                            .kbCapsuleBackground(color: .teal)
-                    }
-                    .disabled(focusedField == .fromValue || focusedField == nil)
-                    
-                    Button(action: {
-                        moveToNextField()
-                    }) {
-                        Image(systemName: "chevron.down")
-                            .kbCapsuleBackground(color: .blue)
-                    }
-                    .disabled(focusedField == .toValue || focusedField == nil)
-                    
-                    Button(action: {
-                        focusedField = nil
-                    }) {
-                        Text("Done")
-                            .kbCapsuleBackground(color: .green)
-                    }
-                }
-            }
             .tint(tab.color())
+            .toolbar { toolbarContent }
         }
     }
     // MARK: - Helper Methods
@@ -200,7 +174,7 @@ struct DifferenceView: View {
 
         switch current {
         case .fromValue:
-            focusedField = nil // First field, no previous
+            focusedField = nil  // First field, no previous
         case .toValue:
             focusedField = .fromValue
         }
@@ -213,10 +187,24 @@ struct DifferenceView: View {
         case .fromValue:
             focusedField = .toValue
         case .toValue:
-            focusedField = nil // Last field, dismiss keyboard
+            focusedField = nil  // Last field, dismiss keyboard
         }
     }
 
+    @ToolbarContentBuilder
+    var toolbarContent: some ToolbarContent {
+        ToolbarItemGroup(placement: .keyboard) {
+            KeyboardToolbarButton.button(.clear) { clearCurrentField() }
+
+            Spacer()
+
+            KeyboardToolbarButton.button(.previous) { moveToPreviousField() }
+
+            KeyboardToolbarButton.button(.next) { moveToNextField() }
+
+            KeyboardToolbarButton.button(.done(tab.color())) { focusedField = nil }
+        }
+    }
 
 }
 

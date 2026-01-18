@@ -19,7 +19,7 @@ final class Investment {
     var ticker: String = ""
     var baseCurrency: String = "USD"
     var transactionCurrency: String = "EUR"
-    var bankBrokerName: String = ""
+    var providerId: UUID? = nil
     var providerName: String? = nil
     private var transactionTypeString: String = "Buy"
 
@@ -30,22 +30,16 @@ final class Investment {
     // Stored properties as String (perfect Decimal precision)
     private var stockPriceString: String = "0"
     private var currencyRateString: String = "1.0"
-    private var fixedCostString: String = "0"
-    private var variableCostString: String = "0"
-    private var maximumCostString: String = "0"
 
     init(
         numberOfStocks: Int = 0,
         stockPrice: Decimal = 0,
         ticker: String = "",
         currencyRate: Decimal = 1.0,
-        fixedCost: Decimal = 0,
-        variableCost: Decimal = 0,
-        maximumCost: Decimal = 0,
         name: String? = nil,
         baseCurrency: String = "USD",
         transactionCurrency: String = "EUR",
-        bankBrokerName: String = "",
+        providerId: UUID? = nil,
         providerName: String? = nil,
         transactionDate: Date = Date(),
         transactionType: TransactionType = .buy
@@ -59,16 +53,13 @@ final class Investment {
         self.ticker = ticker
         self.baseCurrency = baseCurrency
         self.transactionCurrency = transactionCurrency
-        self.bankBrokerName = bankBrokerName
+        self.providerId = providerId
         self.providerName = providerName
         self.transactionTypeString = transactionType.rawValue
 
         // Store Decimals as Strings for perfect precision
         self.stockPriceString = "\(stockPrice)"
         self.currencyRateString = "\(currencyRate)"
-        self.fixedCostString = "\(fixedCost)"
-        self.variableCostString = "\(variableCost)"
-        self.maximumCostString = "\(maximumCost)"
     }
 }
 
@@ -84,27 +75,6 @@ extension Investment {
     var currencyRate: Decimal {
         get { Decimal(string: currencyRateString) ?? 1.0 }
         set { currencyRateString = "\(newValue)" }
-    }
-
-    /// Fixed cost as Decimal with perfect precision
-    var fixedCost: Decimal {
-        get { Decimal(string: fixedCostString) ?? 0 }
-        set { fixedCostString = "\(newValue)" }
-    }
-
-    /// Variable cost as Decimal with perfect precision
-    var variableCost: Decimal {
-        get { Decimal(string: variableCostString) ?? 0 }
-        set { variableCostString = "\(newValue)" }
-    }
-
-    /// Maximum cost as Decimal with perfect precision
-    var maximumCost: Decimal {
-        get { Decimal(string: maximumCostString) ?? 0 }
-        set {
-            maximumCostString = "\(newValue)"
-            modifiedAt = Date()
-        }
     }
 
     /// Transaction type (buy or sell)
@@ -124,22 +94,10 @@ extension Investment {
         return Decimal(numberOfStocks) * stockPrice
     }
 
-    /// Total cost including fixed and variable costs, with minimum and maximum cap
-    /// Formula: MAX(150, fixedCost + (totalInvested / currencyRate * variableCost))
+    /// Total cost - returns 150 as legacy minimum
+    /// Note: Investment stores a snapshot at transaction time, not dynamic calculation
     var totalCost: Decimal {
-        // Variable cost applies to the invested amount in base currency
-        let investedAmountBase = totalInvested / currencyRate
-        let variableCostAmount = investedAmountBase * variableCost
-        let totalWithoutMax = fixedCost + variableCostAmount
-
-        // Apply minimum cost of 150
-        let costWithMinimum = max(150, totalWithoutMax)
-
-        // Apply maximum cost cap
-        if maximumCost > 0 {
-            return min(costWithMinimum, maximumCost)
-        }
-        return costWithMinimum
+        return 150 // Legacy minimum for historical records
     }
 
     /// Total amount including investment and costs in transaction currency
@@ -162,13 +120,10 @@ extension Investment {
             stockPrice: projection.stockPrice,
             ticker: projection.ticker,
             currencyRate: projection.currencyRate,
-            fixedCost: projection.fixedCost,
-            variableCost: projection.variableCost,
-            maximumCost: projection.maximumCost ?? 0,
             name: projection.name,
             baseCurrency: projection.baseCurrency,
             transactionCurrency: projection.transactionCurrency,
-            bankBrokerName: projection.bankBrokerName,
+            providerId: projection.providerId,
             providerName: projection.providerName,
             transactionDate: projection.transactionDate,
             transactionType: projection.transactionType

@@ -25,12 +25,7 @@ final class Settings {
 
     // Cost Settings
     var applyCost: Bool = true // Controls cost feature visibility
-    var bankBrokerName: String = ""
-
-    // Default Costs (stored as Strings for Decimal precision)
-    private var defaultFixedCostString: String = "0"
-    private var defaultVariableCostString: String = "0"
-    private var defaultMaximumCostString: String? = nil
+    var defaultProviderId: UUID? = nil // Reference to selected BankBrokerProvider
 
     // Currency List Cache (synced via iCloud)
     private var cachedSupportedCurrenciesString: String? = nil
@@ -42,10 +37,7 @@ final class Settings {
         baseCurrency: String = "USD",
         transactionCurrency: String = "EUR",
         applyCost: Bool = true,
-        bankBrokerName: String = "",
-        defaultFixedCost: Decimal = 0,
-        defaultVariableCost: Decimal = 0,
-        defaultMaximumCost: Decimal? = nil
+        defaultProviderId: UUID? = nil
     ) {
         self.id = UUID()
         self.createdAt = Date()
@@ -55,10 +47,7 @@ final class Settings {
         self.baseCurrency = baseCurrency
         self.transactionCurrencyString = transactionCurrency
         self.applyCost = applyCost
-        self.bankBrokerName = bankBrokerName
-        self.defaultFixedCostString = "\(defaultFixedCost)"
-        self.defaultVariableCostString = "\(defaultVariableCost)"
-        self.defaultMaximumCostString = defaultMaximumCost.map { "\($0)" }
+        self.defaultProviderId = defaultProviderId
     }
 }
 
@@ -101,38 +90,6 @@ extension Settings {
     }
 }
 
-// MARK: - Cost Properties
-extension Settings {
-    /// Default fixed cost as Decimal with perfect precision
-    var defaultFixedCost: Decimal {
-        get { Decimal(string: defaultFixedCostString) ?? 0 }
-        set {
-            defaultFixedCostString = "\(newValue)"
-            modifiedAt = Date()
-        }
-    }
-
-    /// Default variable cost as Decimal with perfect precision
-    var defaultVariableCost: Decimal {
-        get { Decimal(string: defaultVariableCostString) ?? 0 }
-        set {
-            defaultVariableCostString = "\(newValue)"
-            modifiedAt = Date()
-        }
-    }
-
-    /// Default maximum cost as Decimal with perfect precision
-    var defaultMaximumCost: Decimal? {
-        get {
-            guard let string = defaultMaximumCostString else { return nil }
-            return Decimal(string: string)
-        }
-        set {
-            defaultMaximumCostString = newValue.map { "\($0)" }
-            modifiedAt = Date()
-        }
-    }
-}
 
 // MARK: - Cached Currency List
 extension Settings {
@@ -182,9 +139,7 @@ extension Settings {
     /// Reset costs when applyCost is disabled
     func resetCostsIfNeeded() {
         if !applyCost {
-            defaultFixedCost = 0
-            defaultVariableCost = 0
-            defaultMaximumCost = nil
+            defaultProviderId = nil
         }
     }
 }

@@ -31,14 +31,10 @@ final class Projection {
     var transactionCurrency: String = "EUR"
     private var currencyRateString: String = "1.0"
 
-    // Costs (stored as Strings for Decimal precision)
-    private var fixedCostString: String = "0"
-    private var variableCostString: String = "0"
-    private var maximumCostString: String? = nil
-
-    // Bank/Broker and Provider
-    var bankBrokerName: String = ""
+    // Provider reference (replaces individual cost fields)
+    var providerId: UUID? = nil
     var providerName: String? = nil
+
     private var transactionTypeString: String = "Buy"
 
     init(
@@ -47,13 +43,10 @@ final class Projection {
         actualNumberOfStocks: Int = 0,
         ticker: String = "",
         currencyRate: Decimal = 1.0,
-        fixedCost: Decimal = 0,
-        variableCost: Decimal = 0,
-        maximumCost: Decimal? = nil,
         name: String? = nil,
         baseCurrency: String = "USD",
         transactionCurrency: String = "EUR",
-        bankBrokerName: String = "",
+        providerId: UUID? = nil,
         providerName: String? = nil,
         transactionDate: Date = Date(),
         transactionType: TransactionType = .buy
@@ -66,7 +59,7 @@ final class Projection {
         self.ticker = ticker
         self.baseCurrency = baseCurrency
         self.transactionCurrency = transactionCurrency
-        self.bankBrokerName = bankBrokerName
+        self.providerId = providerId
         self.providerName = providerName
         self.transactionTypeString = transactionType.rawValue
 
@@ -75,9 +68,6 @@ final class Projection {
         self.stockPriceString = "\(stockPrice)"
         self.actualNumberOfStocksString = "\(actualNumberOfStocks)"
         self.currencyRateString = "\(currencyRate)"
-        self.fixedCostString = "\(fixedCost)"
-        self.variableCostString = "\(variableCost)"
-        self.maximumCostString = maximumCost.map { "\($0)" }
     }
 }
 
@@ -106,36 +96,6 @@ extension Projection {
         get { Decimal(string: currencyRateString) ?? 1.0 }
         set {
             currencyRateString = "\(newValue)"
-            modifiedAt = Date()
-        }
-    }
-
-    /// Fixed cost as Decimal with perfect precision
-    var fixedCost: Decimal {
-        get { Decimal(string: fixedCostString) ?? 0 }
-        set {
-            fixedCostString = "\(newValue)"
-            modifiedAt = Date()
-        }
-    }
-
-    /// Variable cost as Decimal with perfect precision
-    var variableCost: Decimal {
-        get { Decimal(string: variableCostString) ?? 0 }
-        set {
-            variableCostString = "\(newValue)"
-            modifiedAt = Date()
-        }
-    }
-
-    /// Maximum cost as Decimal with perfect precision
-    var maximumCost: Decimal? {
-        get {
-            guard let string = maximumCostString else { return nil }
-            return Decimal(string: string)
-        }
-        set {
-            maximumCostString = newValue.map { "\($0)" }
             modifiedAt = Date()
         }
     }
@@ -170,22 +130,18 @@ extension Projection {
         return currencyRate != 0 ? baseAmountAvailable * currencyRate : 0
     }
 
-    /// Total cost including fixed and variable costs, capped by maximum if set
-    /// Formula: MAX(150, fixedCost + (investedAmountInBaseCurrency * variableCost))
+    /// Total cost calculated from provider, with legacy 150 minimum
+    /// Returns 150 if no provider is set (legacy behavior)
     var totalCost: Decimal {
-        // Variable cost applies to the invested amount in base currency
-        let investedAmountBase = investedAmount / currencyRate
-        let variableCostAmount = investedAmountBase * variableCost
-        let totalWithoutMax = fixedCost + variableCostAmount
-
-        // Apply minimum cost of 150
-        let costWithMinimum = max(150, totalWithoutMax)
-
-        // Apply maximum cost cap if set
-        if let maxCost = maximumCost, maxCost > 0 {
-            return min(costWithMinimum, maxCost)
+        // If no provider, return legacy minimum of 150
+        guard providerId != nil else {
+            return 150
         }
-        return costWithMinimum
+
+        // Note: Actual calculation requires ModelContext to fetch provider
+        // This property should not be used directly - use calculateTotalCostFromProvider instead
+        // Returning 150 as fallback
+        return 150
     }
 
     /// Net amount available after costs in base currency
@@ -266,29 +222,44 @@ extension Projection {
         self.baseCurrency = settings.baseCurrency
         self.transactionCurrency = settings.transactionCurrency
         self.currencyRate = settings.effectiveCurrencyRate
-        self.bankBrokerName = settings.bankBrokerName
+        self.providerId = settings.defaultProviderId
         self.providerName = nil
-
-        // Reset costs if Apply Cost is enabled
-        if settings.applyCost {
-            self.fixedCost = settings.defaultFixedCost
-            self.variableCost = settings.defaultVariableCost
-            self.maximumCost = settings.defaultMaximumCost
-        } else {
-            self.fixedCost = 0
-            self.variableCost = 0
-            self.maximumCost = nil
-        }
-
         self.modifiedAt = Date()
     }
 
-    /// Load costs from a BankBrokerCost provider
-    func loadFromProvider(_ provider: BankBrokerCost) {
-        self.fixedCost = provider.fixedCost
-        self.variableCost = provider.variableCostRate
-        self.maximumCost = provider.maximumCost
-        self.providerName = provider.bankBrokerName
+    /// Load costs from a BankBrokerProvider
+    func loadFromProvider(_ provider: BankBrokerProvider) {
+        self.providerId = provider.id
+        self.providerName = provider.displayName
         self.modifiedAt = Date()
+    }
+
+    /// Calculate total cost from provider using CostCalculationService
+    /// - Parameter modelContext: The model context to fetch provider
+    /// - Returns: The calculated net cost, or 150 if no provider is set
+    func calculateTotalCostFromProvider(modelContext: ModelContext) -> Decimal {
+        guard let providerId = providerId else {
+            return 150 // Legacy minimum
+        }
+
+        // Fetch provider from context
+        let descriptor = FetchDescriptor<BankBrokerProvider>(
+            predicate: #Predicate { $0.id == providerId }
+        )
+
+        guard let provider = try? modelContext.fetch(descriptor).first else {
+            return 150 // Fallback if provider not found
+        }
+
+        // Use CostCalculationService to calculate cost
+        let result = CostCalculationService.shared.calculateCost(
+            provider: provider,
+            transactionAmount: investedAmount,
+            baseCurrency: baseCurrency,
+            transactionCurrency: transactionCurrency,
+            currencyRate: currencyRate
+        )
+
+        return result.netCost
     }
 }

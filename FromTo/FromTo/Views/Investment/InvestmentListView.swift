@@ -87,12 +87,9 @@ struct InvestmentListView: View {
 
         let newInvestment = Investment(
             currencyRate: settings.effectiveCurrencyRate,
-            fixedCost: settings.applyCost ? settings.defaultFixedCost : 0,
-            variableCost: settings.applyCost ? settings.defaultVariableCost : 0,
-            maximumCost: settings.applyCost ? (settings.defaultMaximumCost ?? 0) : 0,
             baseCurrency: settings.baseCurrency,
             transactionCurrency: settings.transactionCurrency,
-            bankBrokerName: settings.bankBrokerName
+            providerId: settings.applyCost ? settings.defaultProviderId : nil
         )
         modelContext.insert(newInvestment)
 

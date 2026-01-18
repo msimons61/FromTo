@@ -13,13 +13,15 @@ struct CircleBackground: ViewModifier {
     var fgColor: Color
     var font: Font
     var padding: CGFloat
+    var prominent: Bool = false
 
     func body(content: Content) -> some View {
         content
-            .foregroundColor(fgColor)
+            .foregroundColor(prominent ? .primary : fgColor)
             .font(font)
             .padding(padding)
-            .background(Color(.secondarySystemFill))
+//            .background(prominent ? fgColor : .clear)
+            .background(prominent ? fgColor : Color(.secondarySystemFill))
             .clipShape(Circle())
     }
 }
@@ -29,11 +31,32 @@ extension View {
         fgColor: Color,
         font: Font = .caption,
         padding: CGFloat = 2,
+        prominent: Bool = false
     ) -> some View {
         modifier(CircleBackground(
             fgColor: fgColor,
             font: font,
             padding: padding,
+            prominent: prominent,
         ))
     }
+}
+
+#Preview {
+//    let tab = AppTab.investment
+//    let tab = AppTab.projection
+    let tab = AppTab.difference
+//    let tab = AppTab.settings
+    
+    VStack{
+        Image(systemName: "checkmark")
+            .circleBackground(fgColor: tab.color(), font: .body, padding: 6)
+        Image(systemName: "xmark")
+            .circleBackground(fgColor: tab.color(), font: .body, padding: 6)
+        Image(systemName: "checkmark")
+            .circleBackground(fgColor: tab.color(), font: .body, padding: 6, prominent: true)
+        Image(systemName: "xmark")
+            .circleBackground(fgColor: tab.color(), font: .body, padding: 6, prominent: true)
+    }
+
 }

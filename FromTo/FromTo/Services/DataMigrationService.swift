@@ -14,6 +14,7 @@ class DataMigrationService {
     static let shared = DataMigrationService()
 
     private let migrationKey = "com.fromto.dataMigrationV2Completed"
+    private let componentArchitectureMigrationKey = "com.fromto.componentArchitectureMigrationCompleted"
 
     private init() {}
 
@@ -62,9 +63,8 @@ class DataMigrationService {
         let fromCurrency = cloudStore.getString(forKey: "com.fromto.settings.fromCurrency") ?? "USD"
         let toCurrency = cloudStore.getString(forKey: "com.fromto.settings.toCurrency") ?? "EUR"
 
-        let defaultFixedCost = cloudStore.getDecimal(forKey: "com.fromto.settings.defaultFixedCost") ?? 0
-        let defaultVariableCost = cloudStore.getDecimal(forKey: "com.fromto.settings.defaultVariableCost") ?? 0
-        let defaultMaximumCost = cloudStore.getDecimal(forKey: "com.fromto.settings.defaultMaximumCost")
+        // Note: Old cost settings are ignored in the new provider-based architecture
+        // Users will need to create providers and select them in settings
 
         // Create new Settings model
         let settings = Settings(
@@ -73,10 +73,7 @@ class DataMigrationService {
             baseCurrency: fromCurrency,
             transactionCurrency: toCurrency,
             applyCost: isApplyCostEnabled,
-            bankBrokerName: "",
-            defaultFixedCost: defaultFixedCost,
-            defaultVariableCost: defaultVariableCost,
-            defaultMaximumCost: defaultMaximumCost
+            defaultProviderId: nil
         )
 
         context.insert(settings)
@@ -87,7 +84,7 @@ class DataMigrationService {
 
     /// Clear old data (for destructive migration)
     func clearOldData(modelContainer: ModelContainer) async throws {
-        let context = modelContainer.mainContext
+        _ = modelContainer.mainContext
 
         // Note: With the schema change, SwiftData will automatically handle
         // clearing incompatible models. This method is here for explicit clearing if needed.
@@ -98,6 +95,30 @@ class DataMigrationService {
     /// Reset migration state (for testing purposes)
     func resetMigrationState() {
         UserDefaults.standard.removeObject(forKey: migrationKey)
+        UserDefaults.standard.removeObject(forKey: componentArchitectureMigrationKey)
         print("Migration state reset")
+    }
+
+    /// Migrate to component-based cost architecture
+    /// Note: This is a destructive migration. BankBrokerCost has been removed from the schema,
+    /// and SwiftData automatically handles removal of incompatible models.
+    /// Users will need to create new BankBrokerProvider records.
+    func migrateToComponentArchitecture(modelContainer: ModelContainer) async throws {
+        // Check if migration already completed
+        if UserDefaults.standard.bool(forKey: componentArchitectureMigrationKey) {
+            print("Component architecture migration already completed")
+            return
+        }
+
+        print("Starting component architecture migration...")
+
+        // Since BankBrokerCost has been removed from the schema, SwiftData will automatically
+        // delete any existing BankBrokerCost records. This is a destructive migration.
+
+        // Users will need to recreate their cost providers using the new component architecture
+
+        // Mark migration as complete
+        UserDefaults.standard.set(true, forKey: componentArchitectureMigrationKey)
+        print("Component architecture migration completed")
     }
 }

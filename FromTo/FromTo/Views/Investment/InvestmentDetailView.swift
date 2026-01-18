@@ -12,12 +12,17 @@ struct InvestmentDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Query private var settingsQuery: [Settings]
+    @Query private var allProviders: [BankBrokerProvider]
 
     let investment: Investment
     let tab: AppTab
 
     private var settings: Settings? {
         settingsQuery.first
+    }
+
+    private var activeProviders: [BankBrokerProvider] {
+        allProviders.filter { $0.isActive(on: transactionDate) }
     }
 
     // MARK: - Filtered Currency Lists
@@ -43,10 +48,7 @@ struct InvestmentDetailView: View {
     @State private var baseCurrency: String
     @State private var transactionCurrency: String
     @State private var currencyRate: Decimal
-    @State private var fixedCost: Decimal
-    @State private var variableCost: Decimal
-    @State private var maximumCost: Decimal
-    @State private var bankBrokerName: String
+    @State private var providerId: UUID?
     @State private var providerName: String
     @State private var transactionType: TransactionType
 
@@ -67,10 +69,7 @@ struct InvestmentDetailView: View {
         _baseCurrency = State(initialValue: investment.baseCurrency)
         _transactionCurrency = State(initialValue: investment.transactionCurrency)
         _currencyRate = State(initialValue: investment.currencyRate)
-        _fixedCost = State(initialValue: investment.fixedCost)
-        _variableCost = State(initialValue: investment.variableCost)
-        _maximumCost = State(initialValue: investment.maximumCost)
-        _bankBrokerName = State(initialValue: investment.bankBrokerName)
+        _providerId = State(initialValue: investment.providerId)
         _providerName = State(initialValue: investment.providerName ?? "")
         _transactionType = State(initialValue: investment.transactionType)
     }
@@ -85,19 +84,7 @@ struct InvestmentDetailView: View {
     }
 
     private var totalCost: Decimal {
-        // Variable cost applies to the invested amount in base currency
-        let investedAmountBase = totalInvested / currencyRate
-        let variableCostAmount = investedAmountBase * variableCost
-        let totalWithoutMax = fixedCost + variableCostAmount
-
-        // Apply minimum cost of 150
-        let costWithMinimum = max(150, totalWithoutMax)
-
-        // Apply maximum cost cap
-        if maximumCost > 0 {
-            return min(costWithMinimum, maximumCost)
-        }
-        return costWithMinimum
+        return investment.totalCost
     }
 
     private var totalAmount: Decimal {
@@ -112,74 +99,104 @@ struct InvestmentDetailView: View {
         Form {
             // MARK: - Details Section
             Section {
-                Picker("Transaction Type", selection: $transactionType) {
-                    ForEach(TransactionType.allCases) { type in
-                        Text(type.rawValue).tag(type)
-                    }
-                }
-                .onChange(of: transactionType) { _, _ in hasChanges = true }
-                
-
-                HStack {
-                    TextField("Name (optional)", text: $name)
-                        .focused($focusedField, equals: .name)
-                        .onChange(of: name) { _, _ in hasChanges = true }
-
-                    if !name.isEmpty {
-                        Button(action: {
-                            name = ""
-                            hasChanges = true
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
+                // Bank/Broker selection (always visible)
+                if settings?.applyCost == true && !activeProviders.isEmpty {
+                    NavigationLink(destination: ProviderCostListView(
+                        selectionMode: .single,
+                        selectedProviderId: $providerId,
+                        tab: tab
+                    )) {
+                        HStack {
+                            Text("Bank/Broker")
+                            Spacer()
+                            Text(providerName.isEmpty ? "None Selected" : providerName)
                                 .foregroundColor(.secondary)
                         }
                     }
-                }
-
-                HStack {
-                    TextField("Ticker Symbol", text: $ticker)
-                        .textInputAutocapitalization(.characters)
-                        .focused($focusedField, equals: .ticker)
-                        .onChange(of: ticker) { _, _ in hasChanges = true }
-
-                    if !ticker.isEmpty {
-                        Button(action: {
-                            ticker = ""
-                            hasChanges = true
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.secondary)
+                    .onChange(of: providerId) { _, newValue in
+                        if let newId = newValue,
+                           let provider = activeProviders.first(where: { $0.id == newId }) {
+                            providerName = provider.displayName
                         }
-                    }
-                }
-
-                DatePicker("Transaction Date", selection: $transactionDate, displayedComponents: .date)
-                    .onChange(of: transactionDate) { _, _ in
                         hasChanges = true
-                        fetchCurrencyRate()
                     }
-
-                HStack {
-                    TextField("Bank/Broker Name", text: $bankBrokerName)
-                        .focused($focusedField, equals: .bankBrokerName)
-                        .onChange(of: bankBrokerName) { _, _ in hasChanges = true }
-                }
-
-                if !providerName.isEmpty {
+                } else if settings?.applyCost == true {
                     HStack {
-                        Text("Provider")
+                        Text("Bank/Broker")
                         Spacer()
-                        Text(providerName)
+                        Text("No active providers")
+                            .foregroundColor(.secondary)
+                    }
+                } else {
+                    HStack {
+                        Text("Bank/Broker")
+                        Spacer()
+                        Text("Cost calculation disabled")
                             .foregroundColor(.secondary)
                     }
                 }
+
+                if providerId != nil {
+                    Picker("Transaction Type", selection: $transactionType) {
+                        ForEach(TransactionType.allCases) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+                    .onChange(of: transactionType) { _, _ in hasChanges = true }
+
+                    HStack {
+                        TextField("Name (optional)", text: $name)
+                            .focused($focusedField, equals: .name)
+                            .onChange(of: name) { _, _ in hasChanges = true }
+
+                        if !name.isEmpty {
+                            Button(action: {
+                                name = ""
+                                hasChanges = true
+                            }) {
+                                Image(systemName: "xmark")
+                            }
+                            .circleBackground(fgColor: tab.color())
+                        }
+                    }
+
+                    HStack {
+                        TextField("Ticker Symbol", text: $ticker)
+                            .textInputAutocapitalization(.characters)
+                            .focused($focusedField, equals: .ticker)
+                            .onChange(of: ticker) { _, _ in hasChanges = true }
+
+                        if !ticker.isEmpty {
+                            Button(action: {
+                                ticker = ""
+                                hasChanges = true
+                            }) {
+                                Image(systemName: "xmark")
+                            }
+                            .circleBackground(fgColor: tab.color())
+                        }
+                    }
+
+                    DatePicker("Transaction Date", selection: $transactionDate, displayedComponents: .date)
+                        .onChange(of: transactionDate) { _, _ in
+                            hasChanges = true
+                            fetchCurrencyRate()
+                        }
+                }
+
             } header: {
                 Text("Details")
                     .foregroundStyle(tab.color())
+            } footer: {
+                if settings?.applyCost == true && activeProviders.isEmpty {
+                    Text("Create a provider in Settings to calculate costs")
+                        .font(.caption)
+                }
             }
 
-            // MARK: - Investment Details Section
-            if transactionType != .deposit && transactionType != .withdrawal {
+            if providerId != nil {
+                // MARK: - Investment Details Section
+                if transactionType != .deposit && transactionType != .withdrawal {
                 Section {
                     HStack {
                         Text("Number of Stocks")
@@ -189,6 +206,16 @@ struct InvestmentDetailView: View {
                             .multilineTextAlignment(.trailing)
                             .focused($focusedField, equals: .numberOfStocks)
                             .onChange(of: numberOfStocks) { _, _ in hasChanges = true }
+
+                        if !numberOfStocks.isEmpty && numberOfStocks != "0" {
+                            Button(action: {
+                                numberOfStocks = "0"
+                                hasChanges = true
+                            }) {
+                                Image(systemName: "xmark")
+                            }
+                            .circleBackground(fgColor: tab.color())
+                        }
                     }
 
                     HStack {
@@ -204,6 +231,16 @@ struct InvestmentDetailView: View {
                         .multilineTextAlignment(.trailing)
                         .focused($focusedField, equals: .stockPrice)
                         .onChange(of: stockPrice) { _, _ in hasChanges = true }
+
+                        if stockPrice != 0 {
+                            Button(action: {
+                                stockPrice = 0
+                                hasChanges = true
+                            }) {
+                                Image(systemName: "xmark")
+                            }
+                            .circleBackground(fgColor: tab.color())
+                        }
                     }
                 } header: {
                     Text("Investment Details")
@@ -272,6 +309,16 @@ struct InvestmentDetailView: View {
                         .focused($focusedField, equals: .currencyRate)
                         .onChange(of: currencyRate) { _, _ in hasChanges = true }
 
+                        if currencyRate != 1.0 {
+                            Button(action: {
+                                currencyRate = 1.0
+                                hasChanges = true
+                            }) {
+                                Image(systemName: "xmark")
+                            }
+                            .circleBackground(fgColor: tab.color())
+                        }
+
                         Button(action: {
                             fetchCurrencyRate()
                         }) {
@@ -290,67 +337,17 @@ struct InvestmentDetailView: View {
             if transactionType != .deposit && transactionType != .withdrawal {
                 Section {
                     HStack {
-                        Text("Fixed Cost")
-                        Spacer()
-                        DecimalTextFieldNonOptional(
-                            label: "Fixed",
-                            value: $fixedCost,
-                            fractionDigits: 2,
-                            suffix: baseCurrency,
-                            tab: tab
-                        )
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .fixedCost)
-                        .onChange(of: fixedCost) { _, _ in hasChanges = true }
-                    }
-
-                    HStack {
-                        Text("Variable Cost")
-                        Spacer()
-                        PercentageTextField(
-                            label: "Variable",
-                            tab: tab,
-                            value: $variableCost
-                        )
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .variableCost)
-                        .onChange(of: variableCost) { _, _ in hasChanges = true }
-                    }
-
-                    HStack {
-                        Text("Maximum Cost")
-                        Spacer()
-                        DecimalTextFieldNonOptional(
-                            label: "Maximum",
-                            value: $maximumCost,
-                            fractionDigits: 2,
-                            suffix: baseCurrency,
-                            tab: tab
-                        )
-                        .multilineTextAlignment(.trailing)
-                        .focused($focusedField, equals: .maximumCost)
-                        .onChange(of: maximumCost) { _, _ in hasChanges = true }
-                    }
-
-                    HStack {
                         Text("Total Cost")
                         Spacer()
                         Text(totalCost.formatted(fractionDigits: 2, enforceMinimumDigits: true) + " " + baseCurrency)
                             .foregroundColor(.secondary)
                     }
                 } header: {
-                    HStack {
-                        Text("Costs")
-                            .foregroundStyle(tab.color())
-                        Spacer()
-                        // Reload button to load costs from settings
-                        Button(action: {
-                            reloadCostsFromSettings()
-                        }) {
-                            Image(systemName: "arrow.counterclockwise")
-                        }
-                        .circleBackground(fgColor: tab.color(), font: .body.bold(), padding: 5)
-                    }
+                    Text("Costs")
+                        .foregroundStyle(tab.color())
+                } footer: {
+                    Text("Cost is calculated from the provider at transaction time")
+                        .font(.caption)
                 }
             }
 
@@ -404,63 +401,40 @@ struct InvestmentDetailView: View {
                 Text("Information")
                     .foregroundStyle(tab.color())
             }
+            }
         }
         .navigationTitle("Investment")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Save") {
+                Button(action: {
                     saveChanges()
-                }
-                .disabled(!hasChanges)
-            }
-
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button("Cancel") {
-                    dismiss()
+                }) {
+                    Image(systemName: "checkmark")
+                        .circleBackground(fgColor: tab.color(), font: .body, padding: 6, prominent: hasChanges)
                 }
             }
 
             // Keyboard toolbar
             ToolbarItemGroup(placement: .keyboard) {
-                Button(action: {
-                    clearCurrentField()
-                }) {
-                    Text("Clear")
-                        .kbCapsuleBackground(color: .red)
-                }
+                KeyboardToolbarButton.button(.clear) { clearCurrentField() }
 
                 Spacer()
 
-                Button(action: {
-                    moveToPreviousField()
-                }) {
-                    Image(systemName: "chevron.up")
-                        .kbCapsuleBackground(color: .teal)
-                }
-                .disabled(focusedField == .name || focusedField == nil)
+                KeyboardToolbarButton.button(.previous) { moveToPreviousField() }
+                    .disabled(focusedField == .name || focusedField == nil)
 
-                Button(action: {
-                    moveToNextField()
-                }) {
-                    Image(systemName: "chevron.down")
-                        .kbCapsuleBackground(color: .blue)
-                }
-                .disabled(focusedField == .maximumCost || focusedField == nil)
+                KeyboardToolbarButton.button(.next) { moveToNextField() }
+                    .disabled(focusedField == .currencyRate || focusedField == nil)
 
-                Button(action: {
-                    focusedField = nil
-                }) {
-                    Text("Done")
-                        .kbCapsuleBackground(color: .green)
-                }
+                KeyboardToolbarButton.button(.done(tab.color())) { focusedField = nil }
             }
         }
         .tint(tab.color())
     }
 
     enum Field: Hashable {
-        case name, ticker, numberOfStocks, stockPrice, currencyRate, fixedCost, variableCost, maximumCost, bankBrokerName
+        case name, ticker, numberOfStocks, stockPrice, currencyRate
     }
 
     // MARK: - Helper Methods
@@ -475,10 +449,7 @@ struct InvestmentDetailView: View {
         investment.baseCurrency = baseCurrency
         investment.transactionCurrency = transactionCurrency
         investment.currencyRate = currencyRate
-        investment.fixedCost = fixedCost
-        investment.variableCost = variableCost
-        investment.maximumCost = maximumCost
-        investment.bankBrokerName = bankBrokerName
+        investment.providerId = providerId
         investment.providerName = providerName.isEmpty ? nil : providerName
         investment.modifiedAt = Date()
 
@@ -486,7 +457,7 @@ struct InvestmentDetailView: View {
         if let balance = investment.balance {
             balance.transactionDate = transactionDate
             balance.transactionType = transactionType
-            balance.bankBrokerName = bankBrokerName
+            balance.bankBrokerName = investment.providerName ?? ""
             balance.ticker = ticker
             balance.name = name.isEmpty ? nil : name
             balance.numberOfStocks = numberOfStocksInt
@@ -505,13 +476,6 @@ struct InvestmentDetailView: View {
         dismiss()
     }
 
-    private func reloadCostsFromSettings() {
-        guard let settings = settings else { return }
-        fixedCost = settings.defaultFixedCost
-        variableCost = settings.defaultVariableCost
-        maximumCost = settings.defaultMaximumCost ?? 0
-        hasChanges = true
-    }
 
     private func fetchCurrencyRate() {
         // Only fetch if double currency is enabled and currencies are different
@@ -558,14 +522,6 @@ struct InvestmentDetailView: View {
             stockPrice = 0
         case .currencyRate:
             currencyRate = 1.0
-        case .fixedCost:
-            fixedCost = 0
-        case .variableCost:
-            variableCost = 0
-        case .maximumCost:
-            maximumCost = 0
-        case .bankBrokerName:
-            bankBrokerName = ""
         }
         hasChanges = true
     }
@@ -584,18 +540,6 @@ struct InvestmentDetailView: View {
             focusedField = .numberOfStocks
         case .currencyRate:
             focusedField = .stockPrice
-        case .bankBrokerName:
-            if settings?.doubleCurrency == true {
-                focusedField = .currencyRate
-            } else {
-                focusedField = .stockPrice
-            }
-        case .fixedCost:
-            focusedField = .bankBrokerName
-        case .variableCost:
-            focusedField = .fixedCost
-        case .maximumCost:
-            focusedField = .variableCost
         }
     }
 
@@ -613,17 +557,9 @@ struct InvestmentDetailView: View {
             if settings?.doubleCurrency == true {
                 focusedField = .currencyRate
             } else {
-                focusedField = .bankBrokerName
+                focusedField = nil
             }
         case .currencyRate:
-            focusedField = .bankBrokerName
-        case .bankBrokerName:
-            focusedField = .fixedCost
-        case .fixedCost:
-            focusedField = .variableCost
-        case .variableCost:
-            focusedField = .maximumCost
-        case .maximumCost:
             focusedField = nil
         }
     }
@@ -636,8 +572,6 @@ struct InvestmentDetailView: View {
                 numberOfStocks: 100,
                 stockPrice: 50,
                 currencyRate: 1.2,
-                fixedCost: 10,
-                variableCost: 0.01,
                 name: "Test Investment"
             ),
             tab: .investment

@@ -14,6 +14,7 @@ struct CapsuleBackground: ViewModifier {
     var font: Font
     var hPadding: CGFloat
     var vPadding: CGFloat
+    var prominent: Bool = false
 
     func body(content: Content) -> some View {
         content
@@ -21,7 +22,8 @@ struct CapsuleBackground: ViewModifier {
             .font(font)
             .padding(.horizontal, hPadding)
             .padding(.vertical, vPadding)
-            .background(Color(.secondarySystemFill))
+//            .background(Color(.secondarySystemFill))
+            .background(prominent ? fgColor : Color(.secondarySystemFill))
             .clipShape(Capsule())
     }
 }
@@ -32,6 +34,7 @@ extension View {
         font: Font = .caption,
         hPadding: CGFloat,
         vPadding: CGFloat,
+        prominent: Bool = false
     ) -> some View {
         modifier(
             CapsuleBackground(
@@ -39,6 +42,7 @@ extension View {
                 font: font,
                 hPadding: hPadding,
                 vPadding: vPadding,
+                prominent: prominent,
             )
         )
     }

@@ -102,7 +102,7 @@ extension Balance {
         return Balance(
             transactionDate: investment.transactionDate,
             transactionType: investment.transactionType,
-            bankBrokerName: investment.bankBrokerName,
+            bankBrokerName: investment.providerName ?? "",
             ticker: investment.ticker,
             name: investment.name,
             numberOfStocks: investment.numberOfStocks,

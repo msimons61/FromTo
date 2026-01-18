@@ -11,8 +11,7 @@ import SwiftData
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var settingsQuery: [Settings]
-    @Query private var allProviders: [BankBrokerCost]
-    @FocusState private var focusedField: Field?
+    @Query private var allProviders: [BankBrokerProvider]
     let tab: AppTab
 
     // Draft state for settings
@@ -21,22 +20,16 @@ struct SettingsView: View {
     @State private var baseCurrency: String = "USD"
     @State private var transactionCurrency: String = "EUR"
     @State private var applyCost: Bool = true
-    @State private var bankBrokerName: String = ""
-    @State private var defaultFixedCost: Decimal = 0
-    @State private var defaultVariableCost: Decimal = 0
-    @State private var defaultMaximumCost: Decimal? = nil
-    @State private var showingInvalidProviderAlert = false
-    @State private var showingNoBrokerWithCostAlert = false
+    @State private var defaultProviderId: UUID? = nil
     @State private var showingSameCurrencyAlert = false
 
     private var settings: Settings? {
         settingsQuery.first
     }
 
-    // Get unique provider names
-    private var uniqueProviderNames: [String] {
-        let names = allProviders.map { $0.bankBrokerName }
-        return Array(Set(names)).sorted()
+    private var selectedProvider: BankBrokerProvider? {
+        guard let providerId = defaultProviderId else { return nil }
+        return allProviders.first { $0.id == providerId }
     }
 
     // MARK: - Filtered Currency Lists
@@ -152,123 +145,80 @@ struct SettingsView: View {
                     }
                 }
 
-                // MARK: - Bank/Broker Section
-                Section {
-                    if applyCost && !uniqueProviderNames.isEmpty {
-                        NavigationLink(
-                            destination: ProviderSelectionView(
-                                selectedProvider: $bankBrokerName,
-                                availableProviders: uniqueProviderNames,
-                                tab: tab
-                            )
-                        ) {
-                            HStack {
-                                Text("Default Bank/Broker")
-                                Spacer()
-                                Text(bankBrokerName.isEmpty ? "None" : bankBrokerName)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        .onChange(of: bankBrokerName) { _, newValue in
-                            // Check for logical inconsistency: Apply Cost enabled but no broker selected
-                            if applyCost && newValue.isEmpty {
-                                showingNoBrokerWithCostAlert = true
-                            } else {
-                                loadCostsFromProvider(newValue)
-                            }
-                            saveSettings()
-                        }
-                    } else {
-                        HStack {
-                            TextField("Bank/Broker Name", text: $bankBrokerName)
-                                .focused($focusedField, equals: .bankBrokerName)
-                                .onChange(of: bankBrokerName) { _, _ in saveSettings() }
-                        }
-                    }
-                } header: {
-                    Text("Default Bank/Broker")
-                        .foregroundStyle(tab.color())
-                }
-
-                // MARK: - Default Cost Section
+                // MARK: - Cost Provider Section
                 Section {
                     Toggle("Apply Cost", isOn: $applyCost)
                         .onChange(of: applyCost) { _, newValue in
                             if !newValue {
-                                defaultFixedCost = 0
-                                defaultVariableCost = 0
-                                defaultMaximumCost = nil
-                            } else {
-                                // When turning ON, validate that bankBrokerName is in provider list
-                                if !bankBrokerName.isEmpty && !uniqueProviderNames.isEmpty {
-                                    if !uniqueProviderNames.contains(where: { $0.lowercased() == bankBrokerName.lowercased() }) {
-                                        showingInvalidProviderAlert = true
-                                    }
-                                }
+                                defaultProviderId = nil
                             }
                             saveSettings()
                         }
 
                     if applyCost {
-                        NavigationLink(destination: BankBrokerCostListView(tab: tab)) {
+                        NavigationLink(
+                            destination: ProviderCostListView(
+                                selectionMode: .single,
+                                selectedProviderId: $defaultProviderId,
+                                tab: tab
+                            )
+                        ) {
                             HStack {
-                                Text("Manage Provider Costs")
+                                Text("Default Provider")
                                 Spacer()
-//                                Image(systemName: "chevron.right")
-//                                    .foregroundColor(.secondary)
+                                Text(selectedProvider?.displayName ?? "None Selected")
+                                    .foregroundColor(.secondary)
                             }
                         }
+                        .onChange(of: defaultProviderId) { _, _ in saveSettings() }
 
-                        HStack {
-                            Text("Fixed Cost")
-                            Spacer()
-                            DecimalTextFieldNonOptional(
-                                label: "Fixed",
-                                value: $defaultFixedCost,
-                                fractionDigits: 2,
-                                suffix: baseCurrency,
+                        // Show provider summary if one is selected
+                        if let provider = selectedProvider {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("Cost Components:")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                    Text("\(provider.costComponents?.count ?? 0)")
+                                        .font(.subheadline)
+                                        .bold()
+                                }
+
+                                ForEach(provider.costComponents ?? []) { component in
+                                    HStack {
+                                        Image(systemName: component.isCredit ? "arrow.down.circle.fill" : "arrow.up.circle.fill")
+                                            .foregroundColor(component.isCredit ? .green : .blue)
+                                            .font(.caption)
+                                        Text(component.displayName)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                        Text(component.calculationMethod.displayName)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+
+                        NavigationLink(
+                            destination: ProviderCostListView(
+                                selectionMode: .manage,
+                                selectedProviderId: .constant(nil),
                                 tab: tab
                             )
-                            .multilineTextAlignment(.trailing)
-                            .focused($focusedField, equals: .fixedCost)
-                            .onChange(of: defaultFixedCost) { _, _ in saveSettings() }
+                        ) {
+                            Text("Manage All Providers")
                         }
-
-                        HStack {
-                            Text("Variable Cost")
-                            Spacer()
-                            PercentageTextField(
-                                label: "Variable",
-                                tab: tab,
-                                value: $defaultVariableCost
-                            )
-                            .multilineTextAlignment(.trailing)
-                            .focused($focusedField, equals: .variableCost)
-                            .onChange(of: defaultVariableCost) { _, _ in saveSettings() }
-                        }
-
-                        HStack {
-                            Text("Maximum Cost")
-                            Spacer()
-                            DecimalTextField(
-                                label: "Maximum",
-                                value: $defaultMaximumCost,
-                                fractionDigits: 2,
-                                suffix: baseCurrency,
-                                tab: tab
-                            )
-                            .multilineTextAlignment(.trailing)
-                            .focused($focusedField, equals: .maximumCost)
-                            .onChange(of: defaultMaximumCost) { _, _ in saveSettings() }
-                        }
-                    } else {
-                        Text("Cost application is disabled")
-                            .foregroundColor(.secondary)
-                            .italic()
                     }
                 } header: {
-                    Text("Default Cost")
+                    Text("Cost Provider")
                         .foregroundStyle(tab.color())
+                } footer: {
+                    if applyCost {
+                        Text("Select a cost provider to automatically apply fees to new projections")
+                    }
                 }
 
                 // MARK: - Information Section
@@ -292,54 +242,9 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Button(action: {
-                        clearCurrentField()
-                    }) {
-                        Text("Clear")
-                            .kbCapsuleBackground(color: .red)
-                    }
-
-                    Spacer()
-
-                    Button(action: {
-                        moveToPreviousField()
-                    }) {
-                        Image(systemName: "chevron.up")
-                            .kbCapsuleBackground(color: .teal)
-                    }
-
-                    Button(action: {
-                        moveToNextField()
-                    }) {
-                        Image(systemName: "chevron.down")
-                            .kbCapsuleBackground(color: .blue)
-                    }
-
-                    Button(action: {
-                        focusedField = nil
-                    }) {
-                        Text("Done")
-                            .kbCapsuleBackground(color: .green)
-                    }
-                }
-            }
             .tint(tab.color())
             .onAppear {
                 loadSettings()
-            }
-            .alert("Invalid Bank/Broker", isPresented: $showingInvalidProviderAlert) {
-                Button("OK", role: .cancel) {
-                    // User acknowledged, they can manually select correct one
-                }
-            } message: {
-                Text("The current Default Bank/Broker '\(bankBrokerName)' is not in your Provider Costs list. Please select a valid Bank/Broker from the list to use cost features.")
-            }
-            .alert("No Bank/Broker Selected", isPresented: $showingNoBrokerWithCostAlert) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text("Apply Cost is enabled but no Default Bank/Broker is selected. This is a logical inconsistency. Please select a Bank/Broker to use cost features, or disable Apply Cost.")
             }
             .alert("Same Currency Not Allowed", isPresented: $showingSameCurrencyAlert) {
                 Button("OK", role: .cancel) { }
@@ -347,10 +252,6 @@ struct SettingsView: View {
                 Text("The Frankfurter API does not support the same currency for both Base Currency and Transaction Currency. The Transaction Currency has been automatically changed to \(transactionCurrency).")
             }
         }
-    }
-
-    enum Field: Hashable {
-        case bankBrokerName, fixedCost, variableCost, maximumCost
     }
 
     // MARK: - Helper Methods
@@ -361,10 +262,7 @@ struct SettingsView: View {
             baseCurrency = settings.baseCurrency
             transactionCurrency = settings.transactionCurrency
             applyCost = settings.applyCost
-            bankBrokerName = settings.bankBrokerName
-            defaultFixedCost = settings.defaultFixedCost
-            defaultVariableCost = settings.defaultVariableCost
-            defaultMaximumCost = settings.defaultMaximumCost
+            defaultProviderId = settings.defaultProviderId
         } else {
             // Create default settings if none exist
             let newSettings = Settings()
@@ -384,10 +282,7 @@ struct SettingsView: View {
         settings.baseCurrency = baseCurrency
         settings.transactionCurrency = transactionCurrency
         settings.applyCost = applyCost
-        settings.bankBrokerName = bankBrokerName
-        settings.defaultFixedCost = defaultFixedCost
-        settings.defaultVariableCost = defaultVariableCost
-        settings.defaultMaximumCost = defaultMaximumCost
+        settings.defaultProviderId = defaultProviderId
         settings.modifiedAt = Date()
 
         try? modelContext.save()
@@ -398,86 +293,6 @@ struct SettingsView: View {
         baseCurrency = transactionCurrency
         transactionCurrency = temp
         saveSettings()
-    }
-
-    private func loadCostsFromProvider(_ providerName: String) {
-        guard !providerName.isEmpty else { return }
-
-        // Find all providers with this name
-        let matchingProviders = allProviders.filter {
-            $0.bankBrokerName.lowercased() == providerName.lowercased()
-        }
-
-        guard !matchingProviders.isEmpty else { return }
-
-        // Get the currently active provider (no end date or end date in the future)
-        let now = Date()
-        let activeProvider = matchingProviders.first { provider in
-            if let endDate = provider.endDate {
-                return endDate >= now
-            }
-            return true // No end date means active
-        }
-
-        // If no active provider, use the most recent one (by start date)
-        let selectedProvider = activeProvider ?? matchingProviders.sorted { $0.startDate > $1.startDate }.first
-
-        // Load costs from the selected provider
-        if let provider = selectedProvider {
-            defaultFixedCost = provider.fixedCost
-            defaultVariableCost = provider.variableCostRate
-            defaultMaximumCost = provider.maximumCost > 0 ? provider.maximumCost : nil
-        }
-    }
-
-    private func clearCurrentField() {
-        switch focusedField {
-        case .bankBrokerName:
-            bankBrokerName = ""
-        case .fixedCost:
-            defaultFixedCost = 0
-        case .variableCost:
-            defaultVariableCost = 0
-        case .maximumCost:
-            defaultMaximumCost = nil
-        default:
-            break
-        }
-        saveSettings()
-    }
-
-    private func moveToPreviousField() {
-        switch focusedField {
-        case .bankBrokerName:
-            focusedField = nil
-        case .fixedCost:
-            focusedField = .bankBrokerName
-        case .variableCost:
-            focusedField = .fixedCost
-        case .maximumCost:
-            focusedField = .variableCost
-        default:
-            focusedField = nil
-        }
-    }
-
-    private func moveToNextField() {
-        switch focusedField {
-        case .bankBrokerName:
-            if applyCost {
-                focusedField = .fixedCost
-            } else {
-                focusedField = nil
-            }
-        case .fixedCost:
-            focusedField = .variableCost
-        case .variableCost:
-            focusedField = .maximumCost
-        case .maximumCost:
-            focusedField = nil
-        default:
-            focusedField = .bankBrokerName
-        }
     }
 }
 

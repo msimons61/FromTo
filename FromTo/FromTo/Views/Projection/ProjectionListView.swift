@@ -70,12 +70,9 @@ struct ProjectionListView: View {
         let newProjection = Projection(
             ticker: "",
             currencyRate: settings.effectiveCurrencyRate,
-            fixedCost: settings.applyCost ? settings.defaultFixedCost : 0,
-            variableCost: settings.applyCost ? settings.defaultVariableCost : 0,
-            maximumCost: settings.applyCost ? settings.defaultMaximumCost : nil,
             baseCurrency: settings.baseCurrency,
             transactionCurrency: settings.transactionCurrency,
-            bankBrokerName: settings.bankBrokerName
+            providerId: settings.applyCost ? settings.defaultProviderId : nil
         )
         modelContext.insert(newProjection)
 

@@ -149,13 +149,6 @@ struct BalanceDetailView: View {
         }
         .navigationTitle("Transaction Details")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Done") {
-                    dismiss()
-                }
-            }
-        }
         .tint(tab.color())
     }
 }
